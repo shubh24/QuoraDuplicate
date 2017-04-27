@@ -9,6 +9,7 @@ import xgboost as xgb
 import math
 from sklearn.cross_validation import train_test_split
 from string import punctuation
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 
 def submit(p_test):
 
@@ -85,10 +86,20 @@ def get_features():
     x_test = pd.DataFrame()
 
     x_train['word_match'] = df_train.apply(word_match_share, axis=1, raw=True)
-    x_train['tfidf_word_match'] = df_train.apply(weighted_word_match_share, axis=1, raw=True)
+    # x_train['tfidf_word_match'] = df_train.apply(weighted_word_match_share, axis=1, raw=True)
+    x_train['z_tfidf_sum1'] = df_train.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+    x_train['z_tfidf_sum2'] = df_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
     x_test['word_match'] = df_test.apply(word_match_share, axis=1, raw=True)
-    x_test['tfidf_word_match'] = df_test.apply(weighted_word_match_share, axis=1, raw=True)
+    # x_test['tfidf_word_match'] = df_test.apply(weighted_word_match_share, axis=1, raw=True)
+    x_test['z_tfidf_sum1'] = df_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+    x_test['z_tfidf_sum2'] = df_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+
+    x_train['z_len1'] = x_train.question1.map(lambda x: len(str(x)))    
+    x_train['z_len2'] = x_train.question2.map(lambda x: len(str(x)))
+
+    x_test['z_len1'] = x_test.question1.map(lambda x: len(str(x)))    
+    x_test['z_len2'] = x_test.question2.map(lambda x: len(str(x)))
 
     y_train = df_train['is_duplicate'].values
 
@@ -146,14 +157,17 @@ if __name__ == '__main__':
     train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
     test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
 
+    tfidf = TfidfVectorizer(stop_words='english', ngram_range=(1, 1))
+    tfidf.fit_transform(train_qs)
+
     words = (" ".join(train_qs)).lower().split()
     counts = Counter(words)
-    weights = {word: get_inverse_freq(len(words)/count, count) for word, count in counts.items()}
+    weights = {word: get_inverse_freq(1/(10000 + count), count) for word, count in counts.items()}
 
     stops = set(stopwords.words("english"))
 
     x_train, x_test, y_train = get_features()
 
-    # pos_train, neg_train = oversample(x_train, y_train)
+    pos_train, neg_train = oversample(x_train, y_train)
 
-    # run_xgb(pos_train, neg_train, x_test)
+    run_xgb(pos_train, neg_train, x_test)
