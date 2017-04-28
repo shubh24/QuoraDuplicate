@@ -10,6 +10,13 @@ import math
 from sklearn.cross_validation import train_test_split
 from string import punctuation
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.preprocessing import MinMaxScaler
+
+import plotly
+import plotly.plotly as py
+import plotly.graph_objs as go
+
+from sklearn.manifold import TSNE
 
 def submit(p_test):
 
@@ -38,7 +45,7 @@ def get_inverse_freq(inverse_freq, count, min_count=2):
     if count < min_count:
         return 0
     else:
-        return math.log(inverse_freq)
+        return inverse_freq
 
 
 def get_tf(text):
@@ -84,22 +91,28 @@ def get_features():
 
     x_train = pd.DataFrame()
     x_test = pd.DataFrame()
-
+    
     x_train['word_match'] = df_train.apply(word_match_share, axis=1, raw=True)
     # x_train['tfidf_word_match'] = df_train.apply(weighted_word_match_share, axis=1, raw=True)
-    x_train['z_tfidf_sum1'] = df_train.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
-    x_train['z_tfidf_sum2'] = df_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+    # x_train['z_tfidf_sum1'] = df_train.question1.map(lambda x:  np.sum(tfidf.transform([str(x)]).data))
+    # x_train['z_tfidf_sum2'] = df_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
     x_test['word_match'] = df_test.apply(word_match_share, axis=1, raw=True)
     # x_test['tfidf_word_match'] = df_test.apply(weighted_word_match_share, axis=1, raw=True)
-    x_test['z_tfidf_sum1'] = df_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
-    x_test['z_tfidf_sum2'] = df_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+    # x_test['z_tfidf_sum1'] = df_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+    # x_test['z_tfidf_sum2'] = df_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
-    x_train['z_len1'] = x_train.question1.map(lambda x: len(str(x)))    
-    x_train['z_len2'] = x_train.question2.map(lambda x: len(str(x)))
+    x_train['z_len1'] = df_train.question1.map(lambda x: len(str(x)))    
+    x_train['z_len2'] = df_train.question2.map(lambda x: len(str(x)))
 
-    x_test['z_len1'] = x_test.question1.map(lambda x: len(str(x)))    
-    x_test['z_len2'] = x_test.question2.map(lambda x: len(str(x)))
+    x_test['z_len1'] = df_test.question1.map(lambda x: len(str(x)))    
+    x_test['z_len2'] = df_test.question2.map(lambda x: len(str(x)))
+
+    x_train['z_words1'] = df_train.question1.map(lambda row: len(str(row).split(" ")))    
+    x_train['z_words2'] = df_train.question2.map(lambda row: len(str(row).split(" ")))
+
+    x_test['z_words1'] = df_test.question1.map(lambda row: len(str(row).split(" ")))    
+    x_test['z_words2'] = df_test.question2.map(lambda row: len(str(row).split(" ")))
 
     y_train = df_train['is_duplicate'].values
 
@@ -147,6 +160,47 @@ def run_xgb(pos_train, neg_train, x_test):
 
     submit(p_test)
 
+def run_tsne(pos_train, neg_train, x_test):
+
+    x_train = pd.concat([pos_train, neg_train]) #Concat positive and negative
+    y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist() #Putting in 1 and 0
+
+    x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
+
+    df_subsampled = x_train[0:3000]
+    X = MinMaxScaler().fit_transform(df_subsampled[['z_len1', 'z_len2', 'z_words1', 'z_words2', 'word_match']])
+    # y = y_train['is_duplicate'].values
+
+    tsne = TSNE(
+        n_components=3,
+        init='random', # pca
+        random_state=101,
+        method='barnes_hut',
+        n_iter=200,
+        verbose=2,
+        angle=0.5
+    ).fit_transform(X)
+
+    trace1 = go.Scatter3d(
+        x=tsne[:,0],
+        y=tsne[:,1],
+        z=tsne[:,2],
+        mode='markers',
+        marker=dict(
+            sizemode='diameter',
+            color = y_train,
+            colorscale = 'Portland',
+            colorbar = dict(title = 'duplicate'),
+            line=dict(color='rgb(255, 255, 255)'),
+            opacity=0.75
+        )
+    )
+
+    data=[trace1]
+    layout=dict(height=800, width=800, title='3d embedding with engineered features')
+    fig=dict(data=data, layout=layout)
+    py.plot(data, filename='3d_bubble')
+
 if __name__ == '__main__':
     
     df_train = pd.read_csv('./train.csv')
@@ -157,12 +211,12 @@ if __name__ == '__main__':
     train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
     test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
 
-    tfidf = TfidfVectorizer(stop_words='english', ngram_range=(1, 1))
-    tfidf.fit_transform(train_qs)
+    tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
+    tfidf.fit_transform(train_qs[0:2500])
 
     words = (" ".join(train_qs)).lower().split()
     counts = Counter(words)
-    weights = {word: get_inverse_freq(1/(10000 + count), count) for word, count in counts.items()}
+    weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
 
     stops = set(stopwords.words("english"))
 
@@ -171,3 +225,5 @@ if __name__ == '__main__':
     pos_train, neg_train = oversample(x_train, y_train)
 
     run_xgb(pos_train, neg_train, x_test)
+
+    run_tsne(pos_train, neg_train, x_test)
