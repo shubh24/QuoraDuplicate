@@ -129,7 +129,7 @@ def pos_match(row):
 
     return common_pos_score/all_pos_score
 
-def get_features():
+def get_features(df_train, df_test):
     
     df_train[1:10].apply(pos_match, axis = 1)
 
@@ -163,9 +163,9 @@ def get_features():
     x_test['z_words2'] = cleaned_test.q2_words.map(lambda row: len(str(row).split(" ")))
     x_test['z_avg_words'] = (x_test['z_words1'] + x_test['z_words2'])/2
 
-    y_train = df_train['is_duplicate'].values
+    # y_train = df_train['is_duplicate'].values
 
-    return x_train, x_test, y_train
+    return x_train, x_test
 
 def oversample(x_train, y_train):
 
@@ -208,7 +208,7 @@ def run_xgb(pos_train, neg_train, x_test):
     d_test = xgb.DMatrix(x_test)
     p_test = bst.predict(d_test)
 
-    submit(p_test)
+    return p_test
 
 def run_tsne(pos_train, neg_train, x_test):
 
@@ -251,10 +251,27 @@ def run_tsne(pos_train, neg_train, x_test):
     fig=dict(data=data, layout=layout)
     py.plot(data, filename='3d_bubble')
 
+def validate(training):
+
+    training_res = training.pop("is_duplicate")
+    x_train, x_valid, y_train, y_valid = train_test_split(training, training_res, test_size=0.2, random_state=4242, stratify = training_res)
+
+    return(x_train, x_valid, y_train, y_valid)
+
+def controller(df_train, df_test, y_train):
+
+    x_train, x_test = get_features(df_train, df_test)
+
+    # pos_train, neg_train = oversample(x_train, y_train) #Taking lite for now
+
+    return run_xgb(pos_train, neg_train, x_test)
+
+    # run_tsne(pos_train, neg_train, x_test)
+
 if __name__ == '__main__':
     
-    df_train = pd.read_csv('./train.csv')
-    df_test = pd.read_csv('./test.csv')
+    df_train = pd.read_csv('./train.csv').fillna("")
+    df_test = pd.read_csv('./test.csv').fillna("")
 
     train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
     test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
@@ -267,11 +284,11 @@ if __name__ == '__main__':
     weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
 
     stops = set(stopwords.words("english"))
-    
-    x_train, x_test, y_train = get_features()
 
-    pos_train, neg_train = oversample(x_train, y_train)
+    x_train, x_valid, y_train, y_valid = validate(df_train)
 
-    run_xgb(pos_train, neg_train, x_test)
+    res = controller(x_train, x_valid, y_train)
 
-    # run_tsne(pos_train, neg_train, x_test)
+    #Compare res & y_valid
+
+    # submit(res)
