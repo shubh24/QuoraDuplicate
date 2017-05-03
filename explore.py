@@ -15,6 +15,7 @@ from sklearn.preprocessing import MinMaxScaler
 import plotly
 import plotly.plotly as py
 import plotly.graph_objs as go
+import matplotlib
 
 from sklearn.manifold import TSNE
 
@@ -40,13 +41,19 @@ def clean(text):
 
     return text
 
+def clean_master(row):
+
+    q1_words = clean(str(row['question1']))
+    q2_words = clean(str(row['question2']))
+
+    return pd.Series({"q1_words" : q1_words, "q2_words": q2_words})
+
 def get_inverse_freq(inverse_freq, count, min_count=2):
 
     if count < min_count:
         return 0
     else:
         return inverse_freq
-
 
 def get_tf(text):
 
@@ -59,60 +66,67 @@ def get_tf(text):
 
 def word_match_share(row):
 
-    q1_words = clean(str(row['question1']))
-    q2_words = clean(str(row['question2']))
+    q1_words = row[0]
+    q2_words = row[1]
 
     if len(q1_words) == 0 or len(q2_words) == 0:
         return 0
 
-    common_words = list(set(q1_words).intersection(q2_words))
-    
-    return len(common_words)/(len(q1_words) + len(q2_words) - len(common_words))
+    common_words = len(list(set(q1_words).intersection(q2_words)))
+    all_words = len(q1_words) + len(q2_words) - common_words
+
+    return common_words/all_words
 
 def weighted_word_match_share(row):
 
-    q1_words = clean(str(row['question1']))
-    q2_words = clean(str(row['question2']))
+    # q1_tf = get_tf(q1_words)
+    # q2_tf = get_tf(q2_words)
 
-    q1_tf = get_tf(q1_words)
-    q2_tf = get_tf(q2_words)
+    q1_words = row[0]
+    q2_words = row[1]
 
     if len(q1_words) == 0 or len(q2_words) == 0:
         return 0
 
     common_words = list(set(q1_words).intersection(q2_words))
     
-    common_words_score = np.sum([weights.get(w, 0)*(q1_tf[w] + q2_tf[w])/2 for w in common_words])
-    all_words_score = np.sum([weights.get(w, 0)*q1_tf[w] for w in q1_words]) + np.sum([weights.get(w, 0)*q2_tf[w] for w in q2_words]) - common_words_score
+    common_words_score = np.sum([weights.get(w, 0) for w in common_words])
+    all_words_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_words_score
     
-    return common_words_score/all_words_score
+    return pd.Series({"weighted_word_match_ratio" : common_words_score/all_words_score, "weighted_word_match_diff": all_words_score - common_words_score, "weighted_word_match_sum": common_words_score})
+
+# def pos_match(row):
+
 
 def get_features():
-
-    x_train = pd.DataFrame()
-    x_test = pd.DataFrame()
     
-    x_train['word_match'] = df_train.apply(word_match_share, axis=1, raw=True)
-    # x_train['tfidf_word_match'] = df_train.apply(weighted_word_match_share, axis=1, raw=True)
+    cleaned_train = df_train.apply(clean_master, axis=1, raw=True)
+    cleaned_test = df_test.apply(clean_master, axis=1, raw=True)
+
+    x_train = cleaned_train.apply(weighted_word_match_share, axis=1)
+    x_train['word_match'] = cleaned_train.apply(word_match_share, axis=1)
+    
     # x_train['z_tfidf_sum1'] = df_train.question1.map(lambda x:  np.sum(tfidf.transform([str(x)]).data))
     # x_train['z_tfidf_sum2'] = df_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
-    x_test['word_match'] = df_test.apply(word_match_share, axis=1, raw=True)
-    # x_test['tfidf_word_match'] = df_test.apply(weighted_word_match_share, axis=1, raw=True)
+    x_test = cleaned_test.apply(weighted_word_match_share, axis=1)
+    x_test['word_match'] = cleaned_test.apply(word_match_share, axis=1)
     # x_test['z_tfidf_sum1'] = df_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
     # x_test['z_tfidf_sum2'] = df_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
-    x_train['z_len1'] = df_train.question1.map(lambda x: len(str(x)))    
-    x_train['z_len2'] = df_train.question2.map(lambda x: len(str(x)))
+    x_train['z_len1'] = cleaned_train.q1_words.map(lambda x: len(str(x)))    
+    x_train['z_len2'] = cleaned_train.q2_words.map(lambda x: len(str(x)))
 
-    x_test['z_len1'] = df_test.question1.map(lambda x: len(str(x)))    
-    x_test['z_len2'] = df_test.question2.map(lambda x: len(str(x)))
+    x_test['z_len1'] = cleaned_test.q1_words.map(lambda x: len(str(x)))    
+    x_test['z_len2'] = cleaned_test.q2_words.map(lambda x: len(str(x)))
 
-    x_train['z_words1'] = df_train.question1.map(lambda row: len(str(row).split(" ")))    
-    x_train['z_words2'] = df_train.question2.map(lambda row: len(str(row).split(" ")))
+    x_train['z_words1'] = cleaned_train.q1_words.map(lambda row: len(str(row).split(" ")))    
+    x_train['z_words2'] = cleaned_train.q2_words.map(lambda row: len(str(row).split(" ")))
+    x_train['z_avg_words'] = (x_train['z_words1'] + x_train['z_words2'])/2
 
-    x_test['z_words1'] = df_test.question1.map(lambda row: len(str(row).split(" ")))    
-    x_test['z_words2'] = df_test.question2.map(lambda row: len(str(row).split(" ")))
+    x_test['z_words1'] = cleaned_test.q1_words.map(lambda row: len(str(row).split(" ")))    
+    x_test['z_words2'] = cleaned_test.q2_words.map(lambda row: len(str(row).split(" ")))
+    x_test['z_avg_words'] = (x_test['z_words1'] + x_test['z_words2'])/2
 
     y_train = df_train['is_duplicate'].values
 
@@ -145,15 +159,16 @@ def run_xgb(pos_train, neg_train, x_test):
     params = {}
     params['objective'] = 'binary:logistic'
     params['eval_metric'] = 'logloss'
-    params['eta'] = 0.02
-    params['max_depth'] = 4
+    params['eta'] = 0.05
+    params['max_depth'] = 6
+    params['silent'] = 1
 
     d_train = xgb.DMatrix(x_train, label=y_train)
     d_valid = xgb.DMatrix(x_valid, label=y_valid)
 
     watchlist = [(d_train, 'train'), (d_valid, 'valid')]
 
-    bst = xgb.train(params, d_train, 400, watchlist, early_stopping_rounds=50, verbose_eval=10)
+    bst = xgb.train(params, d_train, 1500, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
     d_test = xgb.DMatrix(x_test)
     p_test = bst.predict(d_test)
@@ -206,24 +221,22 @@ if __name__ == '__main__':
     df_train = pd.read_csv('./train.csv')
     df_test = pd.read_csv('./test.csv')
 
-    # p = df_train['is_duplicate'].mean() # Our predicted probability
-
     train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
     test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
 
-    tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
-    tfidf.fit_transform(train_qs[0:2500])
+    # tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
+    # tfidf.fit_transform(train_qs[0:2500])
 
     words = (" ".join(train_qs)).lower().split()
     counts = Counter(words)
     weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
 
     stops = set(stopwords.words("english"))
-
+    
     x_train, x_test, y_train = get_features()
 
     pos_train, neg_train = oversample(x_train, y_train)
 
     run_xgb(pos_train, neg_train, x_test)
 
-    run_tsne(pos_train, neg_train, x_test)
+    # run_tsne(pos_train, neg_train, x_test)
