@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import math
+import nltk
 from sklearn.cross_validation import train_test_split
 from string import punctuation
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -95,17 +96,48 @@ def weighted_word_match_share(row):
     
     return pd.Series({"weighted_word_match_ratio" : common_words_score/all_words_score, "weighted_word_match_diff": all_words_score - common_words_score, "weighted_word_match_sum": common_words_score})
 
-# def pos_match(row):
+def pos_match(row):
 
+    q1 = str(row["question1"])
+    q2 = str(row["question2"])
+
+    q1 = ''.join([c.lower() for c in q1 if c not in punctuation])
+    q2 = ''.join([c.lower() for c in q2 if c not in punctuation])
+
+    pos_tag1 = nltk.pos_tag(nltk.word_tokenize(q1))
+    pos_tag2 = nltk.pos_tag(nltk.word_tokenize(q2))
+
+    pos_hash = {}
+    common_pos = []
+
+    for tag in pos_tag1:
+        if tag[1] not in pos_hash:
+            pos_hash.update({tag[1]:[tag[0]]})
+        else:
+            pos_hash[tag[1]].append(tag[0])
+
+    for tag in pos_tag2:
+        
+        if tag[1] not in pos_hash:
+            continue
+
+        if tag[0] in pos_hash[tag[1]]:
+            common_pos.append(tag[0])
+
+    common_pos_score = np.sum([weights.get(w, 0) for w in common_pos])
+    all_pos_score = np.sum([weights.get(w, 0) for w in nltk.word_tokenize(q1)]) + np.sum([weights.get(w, 0) for w in nltk.word_tokenize(q2)]) - common_pos_score
+
+    return common_pos_score/all_pos_score
 
 def get_features():
     
+    df_train[1:10].apply(pos_match, axis = 1)
+
     cleaned_train = df_train.apply(clean_master, axis=1, raw=True)
     cleaned_test = df_test.apply(clean_master, axis=1, raw=True)
 
-    x_train = cleaned_train.apply(weighted_word_match_share, axis=1)
-    x_train['word_match'] = cleaned_train.apply(word_match_share, axis=1)
-    
+    x_train = cleaned_traipn.apply(weighted_word_match_share, axis=1)
+    x_train['word_match'] = cleaned_train.apply(word_match_share, axis=1)    
     # x_train['z_tfidf_sum1'] = df_train.question1.map(lambda x:  np.sum(tfidf.transform([str(x)]).data))
     # x_train['z_tfidf_sum2'] = df_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
@@ -114,6 +146,9 @@ def get_features():
     # x_test['z_tfidf_sum1'] = df_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
     # x_test['z_tfidf_sum2'] = df_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
+    x_train['pos_match_ratio'] = df_train.apply(pos_match, axis = 1)
+    x_test['pos_match_ratio'] = df_test.apply(pos_match, axis = 1)
+    
     x_train['z_len1'] = cleaned_train.q1_words.map(lambda x: len(str(x)))    
     x_train['z_len2'] = cleaned_train.q2_words.map(lambda x: len(str(x)))
 
