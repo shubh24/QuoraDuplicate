@@ -144,12 +144,15 @@ def generate_hash_freq(row):
     else:
         hash_table[hash_key2] += 1
 
-def get_hash_freq(row):
+def q1_hash_freq(row):
 
     hash_key1 = hash(str(row["question1"]))
-    hash_key2 = hash(str(row["question2"]))
+    return hash_table[hash_key1]
 
-    return pd.Series({"freq1":hash_table[hash_key1], "freq2":hash_table[hash_key2]})
+def q2_hash_freq(row):
+
+    hash_key2 = hash(str(row["question2"]))
+    return hash_table[hash_key2]
 
 def get_features(df_train, df_test):
     
@@ -166,8 +169,11 @@ def get_features(df_train, df_test):
     # x_test['z_tfidf_sum1'] = df_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
     # x_test['z_tfidf_sum2'] = df_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
-    x_train = pd.concat(x_train, x_train.apply(get_hash_freq, axis = 1), axis = 1)
-    x_test = pd.concat(x_test, x_test.apply(get_hash_freq, axis = 1), axis = 1)
+    x_train["q1_freq"] = df_train.apply(q1_hash_freq, axis = 1)
+    x_train["q2_freq"] = df_train.apply(q2_hash_freq, axis = 1)
+
+    x_test["q1_freq"] = df_test.apply(q1_hash_freq, axis = 1)
+    x_test["q2_freq"] = df_test.apply(q2_hash_freq, axis = 1)
 
     x_train['pos_match_ratio'] = df_train.apply(pos_match, axis = 1)
     x_test['pos_match_ratio'] = df_test.apply(pos_match, axis = 1)
@@ -281,9 +287,9 @@ def validate(training):
 
     return(x_train, x_valid, y_train, y_valid)
 
-def controller(df_train, df_test, y_train, y_valid):
+def controller(x_train, x_test, y_train, y_valid):
 
-    x_train, x_test = get_features(df_train, df_test)
+    x_train, x_test = get_features(x_train, x_test)
 
     # pos_train, neg_train = oversample(x_train, y_train) #Taking lite for now
 
