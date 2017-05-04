@@ -22,6 +22,8 @@ from sklearn.manifold import TSNE
 import spacy
 nlp = spacy.load('en')
 
+question_types = ["what", "how", "why", "is", "which", "can", "i", "who", "do", "where", "if", "does", "are", "when", "should", "will", "did", "has", "would", "have", "was", "could"]
+
 def submit(p_test):
 
     sub = pd.DataFrame()
@@ -163,6 +165,47 @@ def spacy_sim(row):
 
     return q1.similarity(q2)
 
+def common_ne_score(row):
+
+    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+    q1_ne = q1.ents
+    q2_ne = q2.ents
+
+    common_ne = len(list(set(q1_ne).intersection(q2_ne)))
+
+    if len(q1_ne) + len(q2_ne) == 0:
+        return 0
+    else:
+       return common_ne/(len(q1_ne) + len(q2_ne) - common_ne)
+
+def stopwords_ratio_q1(row):
+
+    q1 = str(row["question1"])
+
+    q1 = ''.join([c.lower() for c in q1 if c not in punctuation]).split(" ")
+
+    return len(set(q1).intersection(stops))/len(q1)
+
+def stopwords_ratio_q2(row):
+
+    q2 = str(row["question2"])
+
+    q2 = ''.join([c.lower() for c in q2 if c not in punctuation]).split(" ")
+
+    return len(set(q2).intersection(stops))/len(q2)
+
+def question_type(row):
+
+    fw_q1 = str(row["question1"]).lower().split(" ")[0]
+    fw_q2 = str(row["question2"]).lower().split(" ")[0]
+
+    if fw_q1 == fw_q2 and fw_q1 in question_types:
+        return 1
+    else:
+        return 0
+
 def get_features(x_train, x_test):
     
     cleaned_train = x_train.apply(clean_master, axis=1, raw=True)
@@ -187,21 +230,39 @@ def get_features(x_train, x_test):
     x_train_feat["spacy_sim"] = x_train.apply(spacy_sim, axis = 1)
     x_test_feat["spacy_sim"] = x_test.apply(spacy_sim, axis = 1)
 
+    # x_train_feat["common_ne_score"] = x_train.apply(common_ne_score, axis = 1)
+    # x_test_feat["common_ne_score"] = x_test.apply(common_ne_score, axis = 1)
+
     x_train_feat['pos_match_ratio'] = x_train.apply(pos_match, axis = 1)
     x_test_feat['pos_match_ratio'] = x_test.apply(pos_match, axis = 1)
+
+    x_train_feat['question_type'] = x_train.apply(question_type, axis = 1)
+    x_test_feat['question_type'] = x_test.apply(question_type, axis = 1)
+
+    x_train_feat['stopwords_ratio_q1'] = x_train.apply(stopwords_ratio_q1, axis = 1)    
+    x_train_feat['stopwords_ratio_q2'] = x_train.apply(stopwords_ratio_q2, axis = 1)    
+
+    x_test_feat['stopwords_ratio_q1'] = x_test.apply(stopwords_ratio_q1, axis = 1)    
+    x_test_feat['stopwords_ratio_q2'] = x_test.apply(stopwords_ratio_q2, axis = 1)    
     
     x_train_feat['z_len1'] = cleaned_train.q1_words.map(lambda x: len(str(x)))    
     x_train_feat['z_len2'] = cleaned_train.q2_words.map(lambda x: len(str(x)))
+    x_train_feat['len_diff'] = abs(x_train_feat['z_len1'] - x_train_feat['z_len2'])
+    x_train_feat['z_avg_len'] = (x_train_feat['z_len1'] + x_train_feat['z_len2'])/2
 
     x_test_feat['z_len1'] = cleaned_test.q1_words.map(lambda x: len(str(x)))    
     x_test_feat['z_len2'] = cleaned_test.q2_words.map(lambda x: len(str(x)))
+    x_test_feat['len_diff'] = abs(x_test_feat['z_len1'] - x_test_feat['z_len2'])
+    x_test_feat['z_avg_len'] = (x_test_feat['z_len1'] + x_test_feat['z_len2'])/2
 
     x_train_feat['z_words1'] = cleaned_train.q1_words.map(lambda row: len(str(row).split(" ")))    
     x_train_feat['z_words2'] = cleaned_train.q2_words.map(lambda row: len(str(row).split(" ")))
+    x_train_feat['words_diff'] = abs(x_train_feat['z_words1'] - x_train_feat['z_words2'])
     x_train_feat['z_avg_words'] = (x_train_feat['z_words1'] + x_train_feat['z_words2'])/2
 
     x_test_feat['z_words1'] = cleaned_test.q1_words.map(lambda row: len(str(row).split(" ")))    
     x_test_feat['z_words2'] = cleaned_test.q2_words.map(lambda row: len(str(row).split(" ")))
+    x_test_feat['words_diff'] = abs(x_test_feat['z_words1'] - x_test_feat['z_words2'])
     x_test_feat['z_avg_words'] = (x_test_feat['z_words1'] + x_test_feat['z_words2'])/2
 
     # y_train = x_train['is_duplicate'].values
