@@ -129,14 +129,34 @@ def pos_match(row):
 
     return common_pos_score/all_pos_score
 
+def generate_hash_freq(row):
+
+    hash_key1 = hash(row["question1"])
+    hash_key2 = hash(row["question2"])
+
+    if hash_key1 not in hash_table:
+        hash_table[hash_key1] = 1
+    else:
+        hash_table[hash_key1] += 1
+
+    if hash_key2 not in hash_table:
+        hash_table[hash_key2] = 1
+    else:
+        hash_table[hash_key2] += 1
+
+def get_hash_freq(row):
+
+    hash_key1 = hash(str(row["question1"]))
+    hash_key2 = hash(str(row["question2"]))
+
+    return pd.Series({"freq1":hash_table[hash_key1], "freq2":hash_table[hash_key2]})
+
 def get_features(df_train, df_test):
     
-    df_train[1:10].apply(pos_match, axis = 1)
-
     cleaned_train = df_train.apply(clean_master, axis=1, raw=True)
     cleaned_test = df_test.apply(clean_master, axis=1, raw=True)
 
-    x_train = cleaned_traipn.apply(weighted_word_match_share, axis=1)
+    x_train = cleaned_train.apply(weighted_word_match_share, axis=1)
     x_train['word_match'] = cleaned_train.apply(word_match_share, axis=1)    
     # x_train['z_tfidf_sum1'] = df_train.question1.map(lambda x:  np.sum(tfidf.transform([str(x)]).data))
     # x_train['z_tfidf_sum2'] = df_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
@@ -145,6 +165,9 @@ def get_features(df_train, df_test):
     x_test['word_match'] = cleaned_test.apply(word_match_share, axis=1)
     # x_test['z_tfidf_sum1'] = df_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
     # x_test['z_tfidf_sum2'] = df_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+
+    x_train = pd.concat(x_train, x_train.apply(get_hash_freq, axis = 1), axis = 1)
+    x_test = pd.concat(x_test, x_test.apply(get_hash_freq, axis = 1), axis = 1)
 
     x_train['pos_match_ratio'] = df_train.apply(pos_match, axis = 1)
     x_test['pos_match_ratio'] = df_test.apply(pos_match, axis = 1)
@@ -183,12 +206,12 @@ def oversample(x_train, y_train):
 
     return pos_train, neg_train
 
-def run_xgb(pos_train, neg_train, x_test):
+def run_xgb(x_train, x_valid, y_train, y_valid):
 
-    x_train = pd.concat([pos_train, neg_train]) #Concat positive and negative
-    y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist() #Putting in 1 and 0
+    # x_train = pd.concat([pos_train, neg_train]) #Concat positive and negative
+    # y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist() #Putting in 1 and 0
 
-    x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
+    # x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
 
     # Set our parameters for xgboost
     params = {}
@@ -258,13 +281,13 @@ def validate(training):
 
     return(x_train, x_valid, y_train, y_valid)
 
-def controller(df_train, df_test, y_train):
+def controller(df_train, df_test, y_train, y_valid):
 
     x_train, x_test = get_features(df_train, df_test)
 
     # pos_train, neg_train = oversample(x_train, y_train) #Taking lite for now
 
-    return run_xgb(pos_train, neg_train, x_test)
+    return run_xgb(x_train, x_valid, y_train, y_valid)
 
     # run_tsne(pos_train, neg_train, x_test)
 
@@ -285,9 +308,14 @@ if __name__ == '__main__':
 
     stops = set(stopwords.words("english"))
 
+    hash_table = {}
+    
+    df_train.apply(generate_hash_freq, axis = 1)
+    df_test.apply(generate_hash_freq, axis = 1)
+
     x_train, x_valid, y_train, y_valid = validate(df_train)
 
-    res = controller(x_train, x_valid, y_train)
+    res = controller(x_train, x_valid, y_train, y_valid)
 
     #Compare res & y_valid
 
