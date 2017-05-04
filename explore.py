@@ -17,8 +17,10 @@ import plotly
 import plotly.plotly as py
 import plotly.graph_objs as go
 import matplotlib
-
 from sklearn.manifold import TSNE
+
+import spacy
+nlp = spacy.load('en')
 
 def submit(p_test):
 
@@ -154,47 +156,57 @@ def q2_hash_freq(row):
     hash_key2 = hash(str(row["question2"]))
     return hash_table[hash_key2]
 
-def get_features(df_train, df_test):
+def spacy_sim(row):
+
+    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+    return q1.similarity(q2)
+
+def get_features(x_train, x_test):
     
-    cleaned_train = df_train.apply(clean_master, axis=1, raw=True)
-    cleaned_test = df_test.apply(clean_master, axis=1, raw=True)
+    cleaned_train = x_train.apply(clean_master, axis=1, raw=True)
+    cleaned_test = x_test.apply(clean_master, axis=1, raw=True)
 
-    x_train = cleaned_train.apply(weighted_word_match_share, axis=1)
-    x_train['word_match'] = cleaned_train.apply(word_match_share, axis=1)    
-    # x_train['z_tfidf_sum1'] = df_train.question1.map(lambda x:  np.sum(tfidf.transform([str(x)]).data))
-    # x_train['z_tfidf_sum2'] = df_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+    x_train_feat = cleaned_train.apply(weighted_word_match_share, axis=1)
+    x_train_feat['word_match'] = cleaned_train.apply(word_match_share, axis=1)    
+    # x_train_feat['z_tfidf_sum1'] = x_train.question1.map(lambda x:  np.sum(tfidf.transform([str(x)]).data))
+    # x_train_feat['z_tfidf_sum2'] = x_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
-    x_test = cleaned_test.apply(weighted_word_match_share, axis=1)
-    x_test['word_match'] = cleaned_test.apply(word_match_share, axis=1)
-    # x_test['z_tfidf_sum1'] = df_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
-    # x_test['z_tfidf_sum2'] = df_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+    x_test_feat = cleaned_test.apply(weighted_word_match_share, axis=1)
+    x_test_feat['word_match'] = cleaned_test.apply(word_match_share, axis=1)
+    # x_test_feat['z_tfidf_sum1'] = x_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+    # x_test_feat['z_tfidf_sum2'] = x_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
-    x_train["q1_freq"] = df_train.apply(q1_hash_freq, axis = 1)
-    x_train["q2_freq"] = df_train.apply(q2_hash_freq, axis = 1)
+    x_train_feat["q1_freq"] = x_train.apply(q1_hash_freq, axis = 1)
+    x_train_feat["q2_freq"] = x_train.apply(q2_hash_freq, axis = 1)
 
-    x_test["q1_freq"] = df_test.apply(q1_hash_freq, axis = 1)
-    x_test["q2_freq"] = df_test.apply(q2_hash_freq, axis = 1)
+    x_test_feat["q1_freq"] = x_test.apply(q1_hash_freq, axis = 1)
+    x_test_feat["q2_freq"] = x_test.apply(q2_hash_freq, axis = 1)
 
-    x_train['pos_match_ratio'] = df_train.apply(pos_match, axis = 1)
-    x_test['pos_match_ratio'] = df_test.apply(pos_match, axis = 1)
+    x_train_feat["spacy_sim"] = x_train.apply(spacy_sim, axis = 1)
+    x_test_feat["spacy_sim"] = x_test.apply(spacy_sim, axis = 1)
+
+    x_train_feat['pos_match_ratio'] = x_train.apply(pos_match, axis = 1)
+    x_test_feat['pos_match_ratio'] = x_test.apply(pos_match, axis = 1)
     
-    x_train['z_len1'] = cleaned_train.q1_words.map(lambda x: len(str(x)))    
-    x_train['z_len2'] = cleaned_train.q2_words.map(lambda x: len(str(x)))
+    x_train_feat['z_len1'] = cleaned_train.q1_words.map(lambda x: len(str(x)))    
+    x_train_feat['z_len2'] = cleaned_train.q2_words.map(lambda x: len(str(x)))
 
-    x_test['z_len1'] = cleaned_test.q1_words.map(lambda x: len(str(x)))    
-    x_test['z_len2'] = cleaned_test.q2_words.map(lambda x: len(str(x)))
+    x_test_feat['z_len1'] = cleaned_test.q1_words.map(lambda x: len(str(x)))    
+    x_test_feat['z_len2'] = cleaned_test.q2_words.map(lambda x: len(str(x)))
 
-    x_train['z_words1'] = cleaned_train.q1_words.map(lambda row: len(str(row).split(" ")))    
-    x_train['z_words2'] = cleaned_train.q2_words.map(lambda row: len(str(row).split(" ")))
-    x_train['z_avg_words'] = (x_train['z_words1'] + x_train['z_words2'])/2
+    x_train_feat['z_words1'] = cleaned_train.q1_words.map(lambda row: len(str(row).split(" ")))    
+    x_train_feat['z_words2'] = cleaned_train.q2_words.map(lambda row: len(str(row).split(" ")))
+    x_train_feat['z_avg_words'] = (x_train_feat['z_words1'] + x_train_feat['z_words2'])/2
 
-    x_test['z_words1'] = cleaned_test.q1_words.map(lambda row: len(str(row).split(" ")))    
-    x_test['z_words2'] = cleaned_test.q2_words.map(lambda row: len(str(row).split(" ")))
-    x_test['z_avg_words'] = (x_test['z_words1'] + x_test['z_words2'])/2
+    x_test_feat['z_words1'] = cleaned_test.q1_words.map(lambda row: len(str(row).split(" ")))    
+    x_test_feat['z_words2'] = cleaned_test.q2_words.map(lambda row: len(str(row).split(" ")))
+    x_test_feat['z_avg_words'] = (x_test_feat['z_words1'] + x_test_feat['z_words2'])/2
 
-    # y_train = df_train['is_duplicate'].values
+    # y_train = x_train['is_duplicate'].values
 
-    return x_train, x_test
+    return x_train_feat, x_test_feat
 
 def oversample(x_train, y_train):
 
@@ -234,12 +246,12 @@ def run_xgb(x_train, x_valid, y_train, y_valid):
 
     bst = xgb.train(params, d_train, 1500, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
-    d_test = xgb.DMatrix(x_test)
+    d_test = xgb.DMatrix(x_test_feat)
     p_test = bst.predict(d_test)
 
     return p_test
 
-def run_tsne(pos_train, neg_train, x_test):
+def run_tsne(pos_train, neg_train, x_test_feat):
 
     x_train = pd.concat([pos_train, neg_train]) #Concat positive and negative
     y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist() #Putting in 1 and 0
@@ -287,15 +299,15 @@ def validate(training):
 
     return(x_train, x_valid, y_train, y_valid)
 
-def controller(x_train, x_test, y_train, y_valid):
+def controller(x_train, x_valid, y_train, y_valid):
 
-    x_train, x_test = get_features(x_train, x_test)
+    # x_train, x_test_feat = get_features(x_train, x_valid)
 
     # pos_train, neg_train = oversample(x_train, y_train) #Taking lite for now
 
     return run_xgb(x_train, x_valid, y_train, y_valid)
 
-    # run_tsne(pos_train, neg_train, x_test)
+    # run_tsne(pos_train, neg_train, x_test_feat)
 
 if __name__ == '__main__':
     
@@ -320,8 +332,11 @@ if __name__ == '__main__':
     df_test.apply(generate_hash_freq, axis = 1)
 
     x_train, x_valid, y_train, y_valid = validate(df_train)
+    
+    x_train_feat, x_valid_feat = get_features(x_train, x_valid)
+    res = run_xgb(x_train_feat, x_valid_feat, y_train, y_valid)
 
-    res = controller(x_train, x_valid, y_train, y_valid)
+    # res = controller(x_train, x_valid, y_train, y_valid)
 
     #Compare res & y_valid
 
