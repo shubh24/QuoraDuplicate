@@ -17,7 +17,7 @@ from sklearn.preprocessing import MinMaxScaler
 import plotly
 import plotly.plotly as py
 import plotly.graph_objs as go
-import matplotlib
+from matplotlib import pyplot
 from sklearn.manifold import TSNE
 
 import spacy
@@ -56,7 +56,7 @@ def clean_master(row):
 
 def get_inverse_freq(inverse_freq, count, min_count=2):
 
-    if count < min_count:
+    if count < min_count:   
         return 0
     else:
         return inverse_freq
@@ -237,6 +237,57 @@ def question_type(row):
     else:
         return 0
 
+def cluster(to_be_clustered):
+
+    cluster_hash = {}
+    cluster_counter = 1
+
+    for index, row in to_be_clustered.iterrows():
+        q1_words = tuple(row[0])
+        q2_words = tuple(row[1])
+        is_duplicate = row[2]
+
+        if is_duplicate == 1:
+            if q1_words not in cluster_hash and q2_words not in cluster_hash:
+                cluster_hash[q1_words] = cluster_counter
+                cluster_hash[q2_words] = cluster_counter
+                cluster_counter += 1
+
+            elif q1_words in cluster_hash and q2_words not in cluster_hash:
+                cluster_hash[q2_words] = cluster_hash[q1_words]
+
+            elif q2_words in cluster_hash and q1_words not in cluster_hash:
+                cluster_hash[q1_words] = cluster_hash[q2_words]
+
+        elif is_duplicate == 0:
+            if q1_words not in cluster_hash:
+                cluster_hash[q1_words] = cluster_counter
+                cluster_counter += 1
+
+            if q2_words not in cluster_hash:
+                cluster_hash[q2_words] = cluster_counter
+                cluster_counter += 1
+
+    return cluster_hash
+
+def get_cluster_size_q1(row):
+
+    q1 = tuple(row["q1_words"])
+
+    if q1 not in cluster_hash:
+        return 0
+    else:
+        return inverse_cluster[cluster_hash[q1]]
+
+def get_cluster_size_q2(row):
+
+    q2 = tuple(row["q2_words"])
+
+    if q2 not in cluster_hash:
+        return 0
+    else:
+        return inverse_cluster[cluster_hash[q2]]
+
 def get_features(x_train, x_test):
     
     cleaned_train = x_train.apply(clean_master, axis=1, raw=True)
@@ -252,6 +303,21 @@ def get_features(x_train, x_test):
     # x_test_feat['z_tfidf_sum1'] = x_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
     # x_test_feat['z_tfidf_sum2'] = x_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
+    cluster_hash = cluster(pd.concat([pd.concat([cleaned_train, cleaned_test]), pd.concat([y_train, y_valid])], axis = 1))
+
+    inverse_cluster = {}
+    for i in cluster_hash.values():
+        if i not in inverse_cluster:
+            inverse_cluster[i] = 1
+        else:
+            inverse_cluster[i] += 1
+
+    x_train_feat["cluster_count_q1"] = cleaned_train.apply(get_cluster_size_q1, axis = 1)
+    x_train_feat["cluster_count_q2"] = cleaned_train.apply(get_cluster_size_q2, axis = 1)
+
+    x_test_feat["cluster_count_q1"] = cleaned_test.apply(get_cluster, axis = 1)
+    x_test_feat["cluster_count_q2"] = cleaned_test.apply(get_cluster, axis = 1)
+
     x_train_feat['bigram_match'] = x_train.apply(get_bigrams, axis = 1)
     x_test_feat['bigram_match'] = x_test.apply(get_bigrams, axis = 1)
 
@@ -260,9 +326,11 @@ def get_features(x_train, x_test):
 
     x_train_feat["q1_freq"] = x_train.apply(q1_hash_freq, axis = 1)
     x_train_feat["q2_freq"] = x_train.apply(q2_hash_freq, axis = 1)
+    x_train_feat["q_freq_avg"] = (x_train_feat["q1_freq"] + x_train_feat["q2_freq"])/2
 
     x_test_feat["q1_freq"] = x_test.apply(q1_hash_freq, axis = 1)
     x_test_feat["q2_freq"] = x_test.apply(q2_hash_freq, axis = 1)
+    x_test_feat["q_freq_avg"] = (x_test_feat["q1_freq"] + x_test_feat["q2_freq"])/2
 
     x_train_feat["spacy_sim"] = x_train.apply(spacy_sim, axis = 1)
     x_test_feat["spacy_sim"] = x_test.apply(spacy_sim, axis = 1)
@@ -342,10 +410,13 @@ def run_xgb(x_train, x_valid, y_train, y_valid):
 
     watchlist = [(d_train, 'train'), (d_valid, 'valid')]
 
-    bst = xgb.train(params, d_train, 1500, watchlist, early_stopping_rounds=50, verbose_eval=50)
+    bst = xgb.train(params, d_train, 1000, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
     d_test = xgb.DMatrix(x_test_feat)
     p_test = bst.predict(d_test)
+
+    xgb.plot_importance(bst)
+    pyplot.show()
 
     return p_test
 
@@ -425,7 +496,7 @@ if __name__ == '__main__':
     stops = set(stopwords.words("english"))
 
     hash_table = {}
-    
+
     df_train.apply(generate_hash_freq, axis = 1)
     df_test.apply(generate_hash_freq, axis = 1)
 
