@@ -8,6 +8,7 @@ import numpy as np
 import xgboost as xgb
 import math
 import nltk
+from nltk import ngrams
 from sklearn.cross_validation import train_test_split
 from string import punctuation
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -99,6 +100,36 @@ def weighted_word_match_share(row):
     all_words_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_words_score
     
     return pd.Series({"weighted_word_match_ratio" : common_words_score/all_words_score, "weighted_word_match_diff": all_words_score - common_words_score, "weighted_word_match_sum": common_words_score})
+
+def get_bigrams(row):
+
+    q1_words = str(row["question1"]).split(" ")
+    q2_words = str(row["question2"]).split(" ")
+
+    bigrams_q1 = set(ngrams(q1_words, 2))
+    bigrams_q2 = set(ngrams(q2_words, 2))
+
+    common_bigrams = len(bigrams_q1.intersection(bigrams_q2))
+
+    if common_bigrams == 0:
+        return 0
+    else:
+        return common_bigrams/(len(bigrams_q1.union(bigrams_q2)))    
+
+def get_trigrams(row):
+
+    q1_words = str(row["question1"]).split(" ")
+    q2_words = str(row["question2"]).split(" ")
+
+    trigrams_q1 = set(ngrams(q1_words, 3))
+    trigrams_q2 = set(ngrams(q2_words, 3))
+
+    common_trigrams = len(trigrams_q1.intersection(trigrams_q2))
+
+    if common_trigrams == 0:
+        return 0
+    else:
+        return common_trigrams/(len(trigrams_q1.union(trigrams_q2)))    
 
 def pos_match(row):
 
@@ -220,6 +251,12 @@ def get_features(x_train, x_test):
     x_test_feat['word_match'] = cleaned_test.apply(word_match_share, axis=1)
     # x_test_feat['z_tfidf_sum1'] = x_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
     # x_test_feat['z_tfidf_sum2'] = x_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
+
+    x_train_feat['bigram_match'] = x_train.apply(get_bigrams, axis = 1)
+    x_test_feat['bigram_match'] = x_test.apply(get_bigrams, axis = 1)
+
+    x_train_feat['trigram_match'] = x_train.apply(get_trigrams, axis = 1)
+    x_test_feat['trigram_match'] = x_test.apply(get_trigrams, axis = 1)
 
     x_train_feat["q1_freq"] = x_train.apply(q1_hash_freq, axis = 1)
     x_train_feat["q2_freq"] = x_train.apply(q2_hash_freq, axis = 1)
