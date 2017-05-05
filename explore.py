@@ -83,6 +83,16 @@ def word_match_share(row):
 
     return common_words/all_words
 
+def tuple_similarity(q1_words, q2_words):
+
+    if len(q1_words) == 0 or len(q2_words) == 0:
+        return 0
+
+    common_words = len(set(q1_words).intersection(set(q2_words)))
+    all_words = len(set(q1_words).union(set(q2_words)))
+
+    return common_words/all_words
+
 def weighted_word_match_share(row):
 
     # q1_tf = get_tf(q1_words)
@@ -240,6 +250,7 @@ def question_type(row):
 def cluster(to_be_clustered):
 
     cluster_hash = {}
+    inverse_hash = {}
     cluster_counter = 1
 
     for index, row in to_be_clustered.iterrows():
@@ -251,42 +262,55 @@ def cluster(to_be_clustered):
             if q1_words not in cluster_hash and q2_words not in cluster_hash:
                 cluster_hash[q1_words] = cluster_counter
                 cluster_hash[q2_words] = cluster_counter
+                inverse_hash[cluster_counter] = [q1_words, q2_words]
                 cluster_counter += 1
 
             elif q1_words in cluster_hash and q2_words not in cluster_hash:
                 cluster_hash[q2_words] = cluster_hash[q1_words]
+                inverse_hash[cluster_hash[q1_words]].append(q2_words)
 
             elif q2_words in cluster_hash and q1_words not in cluster_hash:
                 cluster_hash[q1_words] = cluster_hash[q2_words]
+                inverse_hash[cluster_hash[q2_words]].append(q1_words)                
 
         elif is_duplicate == 0:
             if q1_words not in cluster_hash:
                 cluster_hash[q1_words] = cluster_counter
+                inverse_hash[cluster_counter] = [q1_words]
                 cluster_counter += 1
 
             if q2_words not in cluster_hash:
                 cluster_hash[q2_words] = cluster_counter
+                inverse_hash[cluster_counter] = [q2_words]
                 cluster_counter += 1
 
-    return cluster_hash
+    for i in inverse_hash:
+        tuple_sum = tuple()
+        for j in inverse_hash[i]:
+            tuple_sum += j
+        inverse_hash[i] = tuple(set(tuple_sum))
 
-def get_cluster_size_q1(row):
+    return cluster_hash, inverse_hash
+
+def get_cluster_sim(row):
 
     q1 = tuple(row["q1_words"])
-
-    if q1 not in cluster_hash:
-        return 0
-    else:
-        return inverse_cluster[cluster_hash[q1]]
-
-def get_cluster_size_q2(row):
-
     q2 = tuple(row["q2_words"])
 
-    if q2 not in cluster_hash:
-        return 0
+    if q1 in cluster_hash and q2 in cluster_hash:
+        if cluster_hash[q1] == cluster_hash[q2]:
+            return 1
+        else:
+            return tuple_similarity(inverse_hash[cluster_hash[q1]], inverse_hash[cluster_hash[q2]])
+
+    elif q1 in cluster_hash and q2 not in cluster_hash:
+        return tuple_similarity(inverse_hash[cluster_hash[q1]], q2)
+
+    elif q2 in cluster_hash and q1 not in cluster_hash:
+        return tuple_similarity(inverse_hash[cluster_hash[q2]], q1)
+
     else:
-        return inverse_cluster[cluster_hash[q2]]
+        return tuple_similarity(q1, q2)
 
 def get_features(x_train, x_test):
     
@@ -303,20 +327,10 @@ def get_features(x_train, x_test):
     # x_test_feat['z_tfidf_sum1'] = x_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
     # x_test_feat['z_tfidf_sum2'] = x_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
-    cluster_hash = cluster(pd.concat([pd.concat([cleaned_train, cleaned_test]), pd.concat([y_train, y_valid])], axis = 1))
+    cluster_hash, inverse_hash = cluster(pd.concat([cleaned_train, y_train], axis = 1))
 
-    inverse_cluster = {}
-    for i in cluster_hash.values():
-        if i not in inverse_cluster:
-            inverse_cluster[i] = 1
-        else:
-            inverse_cluster[i] += 1
-
-    x_train_feat["cluster_count_q1"] = cleaned_train.apply(get_cluster_size_q1, axis = 1)
-    x_train_feat["cluster_count_q2"] = cleaned_train.apply(get_cluster_size_q2, axis = 1)
-
-    x_test_feat["cluster_count_q1"] = cleaned_test.apply(get_cluster, axis = 1)
-    x_test_feat["cluster_count_q2"] = cleaned_test.apply(get_cluster, axis = 1)
+    x_train_feat["cluster_match"] = cleaned_train.apply(get_cluster_sim, axis = 1)
+    x_test_feat["cluster_match"] = cleaned_test.apply(get_cluster_sim, axis = 1)
 
     x_train_feat['bigram_match'] = x_train.apply(get_bigrams, axis = 1)
     x_test_feat['bigram_match'] = x_test.apply(get_bigrams, axis = 1)
