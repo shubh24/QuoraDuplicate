@@ -13,7 +13,7 @@ from sklearn.cross_validation import train_test_split
 from string import punctuation
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.preprocessing import MinMaxScaler
-
+from simhash import Simhash
 import plotly
 import plotly.plotly as py
 import plotly.graph_objs as go
@@ -83,6 +83,19 @@ def word_match_share(row):
 
     return common_words/all_words
 
+def get_cosine_sim(row):
+
+    q1_words = row[0]
+    q2_words = row[1]
+
+    if len(q1_words) == 0 or len(q2_words) == 0:
+        return 0
+
+    common_words = len(list(set(q1_words).intersection(q2_words)))
+    all_words = pow(len(q1_words),0.5)*pow(len(q2_words),0.5)
+
+    return common_words/all_words
+
 def tuple_similarity(q1_words, q2_words):
 
     if len(q1_words) == 0 or len(q2_words) == 0:
@@ -110,6 +123,26 @@ def weighted_word_match_share(row):
     all_words_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_words_score
     
     return pd.Series({"weighted_word_match_ratio" : common_words_score/all_words_score, "weighted_word_match_diff": all_words_score - common_words_score, "weighted_word_match_sum": common_words_score})
+
+def get_word_bigrams(words):
+
+    ngrams = []
+
+    for i in range(0, len(words)):
+        if i > 0:
+            ngrams.append("%s %s"%(words[i-1], words[i]))
+
+    return ngrams
+
+# def get_word_trigrams(words):
+
+#     ngrams = []
+
+#     for i in range(0, len(words)):
+#         if i > 1:
+#             ngrams.append("%s %s"%(words[i-2], words[i-1], words[i]))
+
+#     return ngrams
 
 def get_bigrams(row):
 
@@ -140,6 +173,17 @@ def get_trigrams(row):
         return 0
     else:
         return common_trigrams/(len(trigrams_q1.union(trigrams_q2)))    
+
+def calculate_simhash_distance(row):
+
+    sequence1 = get_word_bigrams(row.question1.split(" "))
+    sequence2 = get_word_bigrams(row.question2.split(" "))
+    
+    try:
+        simhash_diff = Simhash(sequence1).distance(Simhash(sequence2))
+        return simhash_diff
+    except:
+        return 0
 
 def pos_match(row):
 
@@ -176,8 +220,8 @@ def pos_match(row):
 
 def generate_hash_freq(row):
 
-    hash_key1 = hash(row["question1"])
-    hash_key2 = hash(row["question2"])
+    hash_key1 = hash(row["question1"].lower())
+    hash_key2 = hash(row["question2"].lower())
 
     if hash_key1 not in hash_table:
         hash_table[hash_key1] = 1
@@ -191,12 +235,12 @@ def generate_hash_freq(row):
 
 def q1_hash_freq(row):
 
-    hash_key1 = hash(str(row["question1"]))
+    hash_key1 = hash(str(row["question1"]).lower())
     return hash_table[hash_key1]
 
 def q2_hash_freq(row):
 
-    hash_key2 = hash(str(row["question2"]))
+    hash_key2 = hash(str(row["question2"]).lower())
     return hash_table[hash_key2]
 
 def spacy_sim(row):
@@ -301,42 +345,55 @@ def get_cluster_sim(row):
         if cluster_hash[q1] == cluster_hash[q2]:
             return 1
         else:
-            return tuple_similarity(inverse_hash[cluster_hash[q1]], inverse_hash[cluster_hash[q2]])
-
-    elif q1 in cluster_hash and q2 not in cluster_hash:
-        return tuple_similarity(inverse_hash[cluster_hash[q1]], q2)
-
-    elif q2 in cluster_hash and q1 not in cluster_hash:
-        return tuple_similarity(inverse_hash[cluster_hash[q2]], q1)
-
+            return 0
     else:
-        return tuple_similarity(q1, q2)
+        return 0
+    #     else:
+    #         return tuple_similarity(inverse_hash[cluster_hash[q1]], inverse_hash[cluster_hash[q2]])
+
+    # elif q1 in cluster_hash and q2 not in cluster_hash:
+    #     return tuple_similarity(inverse_hash[cluster_hash[q1]], q2)
+
+    # elif q2 in cluster_hash and q1 not in cluster_hash:
+    #     return tuple_similarity(inverse_hash[cluster_hash[q2]], q1)
+
+    # else:
+    #     return tuple_similarity(q1, q2)
 
 def get_features(x_train, x_test):
     
     cleaned_train = x_train.apply(clean_master, axis=1, raw=True)
     cleaned_test = x_test.apply(clean_master, axis=1, raw=True)
 
+    #jacard
     x_train_feat = cleaned_train.apply(weighted_word_match_share, axis=1)
     x_train_feat['word_match'] = cleaned_train.apply(word_match_share, axis=1)    
+    x_train_feat['cosine_sim'] = cleaned_train.apply(get_cosine_sim, axis=1)    
+
     # x_train_feat['z_tfidf_sum1'] = x_train.question1.map(lambda x:  np.sum(tfidf.transform([str(x)]).data))
     # x_train_feat['z_tfidf_sum2'] = x_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
     x_test_feat = cleaned_test.apply(weighted_word_match_share, axis=1)
     x_test_feat['word_match'] = cleaned_test.apply(word_match_share, axis=1)
+    x_test_feat['cosine_sim'] = cleaned_test.apply(get_cosine_sim, axis=1)    
+
     # x_test_feat['z_tfidf_sum1'] = x_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
     # x_test_feat['z_tfidf_sum2'] = x_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
 
-    cluster_hash, inverse_hash = cluster(pd.concat([cleaned_train, y_train], axis = 1))
+    #Clustering currently on hold
+    # cluster_hash, inverse_hash = cluster(pd.concat([cleaned_train, y_train], axis = 1))
+    # x_train_feat["cluster_match"] = cleaned_train.apply(get_cluster_sim, axis = 1)
+    # x_test_feat["cluster_match"] = cleaned_test.apply(get_cluster_sim, axis = 1)
 
-    x_train_feat["cluster_match"] = cleaned_train.apply(get_cluster_sim, axis = 1)
-    x_test_feat["cluster_match"] = cleaned_test.apply(get_cluster_sim, axis = 1)
-
+    #shingling
     x_train_feat['bigram_match'] = x_train.apply(get_bigrams, axis = 1)
     x_test_feat['bigram_match'] = x_test.apply(get_bigrams, axis = 1)
 
     x_train_feat['trigram_match'] = x_train.apply(get_trigrams, axis = 1)
     x_test_feat['trigram_match'] = x_test.apply(get_trigrams, axis = 1)
+
+    x_train_feat['simhash_sim'] = x_train.apply(calculate_simhash_distance, axis = 1)
+    x_test_feat['simhash_sim'] = x_test.apply(calculate_simhash_distance, axis = 1)
 
     x_train_feat["q1_freq"] = x_train.apply(q1_hash_freq, axis = 1)
     x_train_feat["q2_freq"] = x_train.apply(q2_hash_freq, axis = 1)
@@ -515,7 +572,8 @@ if __name__ == '__main__':
     df_test.apply(generate_hash_freq, axis = 1)
 
     x_train, x_valid, y_train, y_valid = validate(df_train)
-    
+    x_test = x_valid
+
     x_train_feat, x_valid_feat = get_features(x_train, x_valid)
     res = run_xgb(x_train_feat, x_valid_feat, y_train, y_valid)
 
