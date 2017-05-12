@@ -34,26 +34,6 @@ def submit(p_test):
 
     sub.to_csv('simple_xgb.csv', index=False)   
 
-def clean(text):
-
-    text = ''.join([c for c in text if c not in punctuation])
-    # text = text.encode('ascii', 'ignore').decode('ascii')
-
-    text = text.lower().split()
-    text = [w for w in text if not w in stops]
-
-    # stemmer = SnowballStemmer('english')
-    # cleaned_words = [stemmer.stem(word) for word in text]
-
-    return text
-
-def clean_master(row):
-
-    q1_words = clean(str(row['question1']))
-    q2_words = clean(str(row['question2']))
-
-    return pd.Series({"q1_words" : q1_words, "q2_words": q2_words})
-
 def get_inverse_freq(inverse_freq, count, min_count=2):
 
     if count < min_count:   
@@ -70,31 +50,6 @@ def get_tf(text):
 
     return tf
 
-def word_match_share(row):
-
-    q1_words = row[0]
-    q2_words = row[1]
-
-    if len(q1_words) == 0 or len(q2_words) == 0:
-        return 0
-
-    common_words = len(list(set(q1_words).intersection(q2_words)))
-    all_words = len(q1_words) + len(q2_words) - common_words
-
-    return common_words/all_words
-
-def get_cosine_sim(row):
-
-    q1_words = row[0]
-    q2_words = row[1]
-
-    if len(q1_words) == 0 or len(q2_words) == 0:
-        return 0
-
-    common_words = len(list(set(q1_words).intersection(q2_words)))
-    all_words = pow(len(q1_words),0.5)*pow(len(q2_words),0.5)
-
-    return common_words/all_words
 
 def tuple_similarity(q1_words, q2_words):
 
@@ -106,14 +61,15 @@ def tuple_similarity(q1_words, q2_words):
 
     return common_words/all_words
 
-def weighted_word_match_share(row):
+def basic_nlp(row):
 
     # q1_tf = get_tf(q1_words)
     # q2_tf = get_tf(q2_words)
 
-    q1_words = row[0]
-    q2_words = row[1]
+    q1_words = str(row[3]).lower().split()
+    q2_words = str(row[4]).lower().split()
 
+    #modify this!
     if len(q1_words) == 0 or len(q2_words) == 0:
         return 0
 
@@ -121,8 +77,90 @@ def weighted_word_match_share(row):
     
     common_words_score = np.sum([weights.get(w, 0) for w in common_words])
     all_words_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_words_score
+
+    hamming_score = sum(1 for i in zip(q1_words, q2_words) if i[0]==i[1])/max(len(q1_words), len(q2_words))
+
+    jacard_score =  len(common_words)/(len(q1_words) + len(q2_words) - len(common_words))  
+    cosine_score = len(common_words)/(pow(len(q1_words),0.5)*pow(len(q2_words),0.5))
+
+    bigrams_q1 = set(ngrams(q1_words, 2))
+    bigrams_q2 = set(ngrams(q2_words, 2))
+    common_bigrams = len(bigrams_q1.intersection(bigrams_q2))
+    if common_bigrams == 0:
+        bigram_score = 0
+    else:
+        bigram_score = common_bigrams/(len(bigrams_q1.union(bigrams_q2)))    
+
+    trigrams_q1 = set(ngrams(q1_words, 3))
+    trigrams_q2 = set(ngrams(q2_words, 3))
+    common_trigrams = len(trigrams_q1.intersection(trigrams_q2))
+    if common_trigrams == 0:
+        trigram_score = 0
+    else:
+        trigram_score = common_trigrams/(len(trigrams_q1.union(trigrams_q2)))    
+
+    pos_tag1 = nltk.pos_tag(q1_words)
+    pos_tag2 = nltk.pos_tag(q2_words)
+    pos_hash = {}
+    common_pos = []
     
-    return pd.Series({"weighted_word_match_ratio" : common_words_score/all_words_score, "weighted_word_match_diff": all_words_score - common_words_score, "weighted_word_match_sum": common_words_score})
+    for tag in pos_tag1:
+        if tag[1] not in pos_hash:
+            pos_hash.update({tag[1]:[tag[0]]})
+        else:
+            pos_hash[tag[1]].append(tag[0])
+    for tag in pos_tag2:
+        if tag[1] not in pos_hash:
+            continue
+        if tag[0] in pos_hash[tag[1]]:
+            common_pos.append(tag[0])
+
+    common_pos_score = np.sum([weights.get(w, 0) for w in common_pos])
+    all_pos_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_pos_score
+
+    sequence1 = get_word_bigrams(q1_words)
+    sequence2 = get_word_bigrams(q2_words)
+
+    try:
+        simhash_diff = Simhash(sequence1).distance(Simhash(sequence2))/64
+    except:
+        simhash_diff = 0.5
+
+    fw_q1 = q1_words[0]
+    fw_q2 = q2_words[0]
+
+    if fw_q1 == fw_q2 and fw_q1 in question_types:
+        question_type_same = 1
+    else:
+        question_type_same = 0
+
+    return pd.Series({
+
+        "weighted_word_match_ratio" : common_words_score/all_words_score,
+        "weighted_word_match_diff": all_words_score - common_words_score, 
+        "weighted_word_match_sum": common_words_score,
+        "jacard_score": jacard_score,
+        "hamming_score": hamming_score,
+        "cosine_score": cosine_score,
+        "bigram_score": bigram_score,
+        "trigram_score": trigram_score,
+        "pos_score": common_pos_score/all_pos_score,
+        "simhash_diff": simhash_diff,
+        "question_type_same": question_type_same,
+        "q1_stops": len(set(q1_words).intersection(stops))/len(q1_words),
+        "q2_stops": len(set(q2_words).intersection(stops))/len(q2_words),
+        "q1_len": len(str(row[3])),
+        "q2_len": len(str(row[4])),
+        "len_diff": abs(len(str(row[3])) - len(str(row[4]))),
+        "len_avg": (len(str(row[3])) + len(str(row[4])))/2,
+        "q1_words": len(q1_words),
+        "q2_words": len(q2_words),
+        "words_diff": abs(len(q1_words) - len(q2_words)),
+        "words_avg": (len(q1_words) + len(q2_words))/2,
+        "q1_caps_count": sum([1 for i in str(row[3]) if i.isupper()]),
+        "q2_caps_count": sum([1 for i in str(row[4]) if i.isupper()]),
+
+    })
 
 def get_word_bigrams(words):
 
@@ -133,90 +171,6 @@ def get_word_bigrams(words):
             ngrams.append("%s %s"%(words[i-1], words[i]))
 
     return ngrams
-
-# def get_word_trigrams(words):
-
-#     ngrams = []
-
-#     for i in range(0, len(words)):
-#         if i > 1:
-#             ngrams.append("%s %s"%(words[i-2], words[i-1], words[i]))
-
-#     return ngrams
-
-def get_bigrams(row):
-
-    q1_words = str(row["question1"]).split(" ")
-    q2_words = str(row["question2"]).split(" ")
-
-    bigrams_q1 = set(ngrams(q1_words, 2))
-    bigrams_q2 = set(ngrams(q2_words, 2))
-
-    common_bigrams = len(bigrams_q1.intersection(bigrams_q2))
-
-    if common_bigrams == 0:
-        return 0
-    else:
-        return common_bigrams/(len(bigrams_q1.union(bigrams_q2)))    
-
-def get_trigrams(row):
-
-    q1_words = str(row["question1"]).split(" ")
-    q2_words = str(row["question2"]).split(" ")
-
-    trigrams_q1 = set(ngrams(q1_words, 3))
-    trigrams_q2 = set(ngrams(q2_words, 3))
-
-    common_trigrams = len(trigrams_q1.intersection(trigrams_q2))
-
-    if common_trigrams == 0:
-        return 0
-    else:
-        return common_trigrams/(len(trigrams_q1.union(trigrams_q2)))    
-
-def calculate_simhash_distance(row):
-
-    sequence1 = get_word_bigrams(row.question1.split(" "))
-    sequence2 = get_word_bigrams(row.question2.split(" "))
-    
-    try:
-        simhash_diff = Simhash(sequence1).distance(Simhash(sequence2))
-        return simhash_diff
-    except:
-        return 0
-
-def pos_match(row):
-
-    q1 = str(row["question1"])
-    q2 = str(row["question2"])
-
-    q1 = ''.join([c.lower() for c in q1 if c not in punctuation])
-    q2 = ''.join([c.lower() for c in q2 if c not in punctuation])
-
-    pos_tag1 = nltk.pos_tag(nltk.word_tokenize(q1))
-    pos_tag2 = nltk.pos_tag(nltk.word_tokenize(q2))
-
-    pos_hash = {}
-    common_pos = []
-
-    for tag in pos_tag1:
-        if tag[1] not in pos_hash:
-            pos_hash.update({tag[1]:[tag[0]]})
-        else:
-            pos_hash[tag[1]].append(tag[0])
-
-    for tag in pos_tag2:
-        
-        if tag[1] not in pos_hash:
-            continue
-
-        if tag[0] in pos_hash[tag[1]]:
-            common_pos.append(tag[0])
-
-    common_pos_score = np.sum([weights.get(w, 0) for w in common_pos])
-    all_pos_score = np.sum([weights.get(w, 0) for w in nltk.word_tokenize(q1)]) + np.sum([weights.get(w, 0) for w in nltk.word_tokenize(q2)]) - common_pos_score
-
-    return common_pos_score/all_pos_score
 
 def generate_hash_freq(row):
 
@@ -265,31 +219,6 @@ def common_ne_score(row):
     else:
        return common_ne/(len(q1_ne) + len(q2_ne) - common_ne)
 
-def stopwords_ratio_q1(row):
-
-    q1 = str(row["question1"])
-
-    q1 = ''.join([c.lower() for c in q1 if c not in punctuation]).split(" ")
-
-    return len(set(q1).intersection(stops))/len(q1)
-
-def stopwords_ratio_q2(row):
-
-    q2 = str(row["question2"])
-
-    q2 = ''.join([c.lower() for c in q2 if c not in punctuation]).split(" ")
-
-    return len(set(q2).intersection(stops))/len(q2)
-
-def question_type(row):
-
-    fw_q1 = str(row["question1"]).lower().split(" ")[0]
-    fw_q2 = str(row["question2"]).lower().split(" ")[0]
-
-    if fw_q1 == fw_q2 and fw_q1 in question_types:
-        return 1
-    else:
-        return 0
 
 def cluster(to_be_clustered):
 
@@ -362,38 +291,8 @@ def get_cluster_sim(row):
 
 def get_features(x_train, x_test):
     
-    cleaned_train = x_train.apply(clean_master, axis=1, raw=True)
-    cleaned_test = x_test.apply(clean_master, axis=1, raw=True)
-
-    #jacard
-    x_train_feat = cleaned_train.apply(weighted_word_match_share, axis=1)
-    x_train_feat['word_match'] = cleaned_train.apply(word_match_share, axis=1)    
-    x_train_feat['cosine_sim'] = cleaned_train.apply(get_cosine_sim, axis=1)    
-
-    # x_train_feat['z_tfidf_sum1'] = x_train.question1.map(lambda x:  np.sum(tfidf.transform([str(x)]).data))
-    # x_train_feat['z_tfidf_sum2'] = x_train.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
-
-    x_test_feat = cleaned_test.apply(weighted_word_match_share, axis=1)
-    x_test_feat['word_match'] = cleaned_test.apply(word_match_share, axis=1)
-    x_test_feat['cosine_sim'] = cleaned_test.apply(get_cosine_sim, axis=1)    
-
-    # x_test_feat['z_tfidf_sum1'] = x_test.question1.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
-    # x_test_feat['z_tfidf_sum2'] = x_test.question2.map(lambda x: np.sum(tfidf.transform([str(x)]).data))
-
-    #Clustering currently on hold
-    # cluster_hash, inverse_hash = cluster(pd.concat([cleaned_train, y_train], axis = 1))
-    # x_train_feat["cluster_match"] = cleaned_train.apply(get_cluster_sim, axis = 1)
-    # x_test_feat["cluster_match"] = cleaned_test.apply(get_cluster_sim, axis = 1)
-
-    #shingling
-    x_train_feat['bigram_match'] = x_train.apply(get_bigrams, axis = 1)
-    x_test_feat['bigram_match'] = x_test.apply(get_bigrams, axis = 1)
-
-    x_train_feat['trigram_match'] = x_train.apply(get_trigrams, axis = 1)
-    x_test_feat['trigram_match'] = x_test.apply(get_trigrams, axis = 1)
-
-    x_train_feat['simhash_sim'] = x_train.apply(calculate_simhash_distance, axis = 1)
-    x_test_feat['simhash_sim'] = x_test.apply(calculate_simhash_distance, axis = 1)
+    x_train_feat = x_train.apply(basic_nlp, axis=1)
+    x_test_feat = x_test.apply(basic_nlp, axis=1)
 
     x_train_feat["q1_freq"] = x_train.apply(q1_hash_freq, axis = 1)
     x_train_feat["q2_freq"] = x_train.apply(q2_hash_freq, axis = 1)
@@ -408,40 +307,6 @@ def get_features(x_train, x_test):
 
     # x_train_feat["common_ne_score"] = x_train.apply(common_ne_score, axis = 1)
     # x_test_feat["common_ne_score"] = x_test.apply(common_ne_score, axis = 1)
-
-    x_train_feat['pos_match_ratio'] = x_train.apply(pos_match, axis = 1)
-    x_test_feat['pos_match_ratio'] = x_test.apply(pos_match, axis = 1)
-
-    x_train_feat['question_type'] = x_train.apply(question_type, axis = 1)
-    x_test_feat['question_type'] = x_test.apply(question_type, axis = 1)
-
-    x_train_feat['stopwords_ratio_q1'] = x_train.apply(stopwords_ratio_q1, axis = 1)    
-    x_train_feat['stopwords_ratio_q2'] = x_train.apply(stopwords_ratio_q2, axis = 1)    
-
-    x_test_feat['stopwords_ratio_q1'] = x_test.apply(stopwords_ratio_q1, axis = 1)    
-    x_test_feat['stopwords_ratio_q2'] = x_test.apply(stopwords_ratio_q2, axis = 1)    
-    
-    x_train_feat['z_len1'] = cleaned_train.q1_words.map(lambda x: len(str(x)))    
-    x_train_feat['z_len2'] = cleaned_train.q2_words.map(lambda x: len(str(x)))
-    x_train_feat['len_diff'] = abs(x_train_feat['z_len1'] - x_train_feat['z_len2'])
-    x_train_feat['z_avg_len'] = (x_train_feat['z_len1'] + x_train_feat['z_len2'])/2
-
-    x_test_feat['z_len1'] = cleaned_test.q1_words.map(lambda x: len(str(x)))    
-    x_test_feat['z_len2'] = cleaned_test.q2_words.map(lambda x: len(str(x)))
-    x_test_feat['len_diff'] = abs(x_test_feat['z_len1'] - x_test_feat['z_len2'])
-    x_test_feat['z_avg_len'] = (x_test_feat['z_len1'] + x_test_feat['z_len2'])/2
-
-    x_train_feat['z_words1'] = cleaned_train.q1_words.map(lambda row: len(str(row).split(" ")))    
-    x_train_feat['z_words2'] = cleaned_train.q2_words.map(lambda row: len(str(row).split(" ")))
-    x_train_feat['words_diff'] = abs(x_train_feat['z_words1'] - x_train_feat['z_words2'])
-    x_train_feat['z_avg_words'] = (x_train_feat['z_words1'] + x_train_feat['z_words2'])/2
-
-    x_test_feat['z_words1'] = cleaned_test.q1_words.map(lambda row: len(str(row).split(" ")))    
-    x_test_feat['z_words2'] = cleaned_test.q2_words.map(lambda row: len(str(row).split(" ")))
-    x_test_feat['words_diff'] = abs(x_test_feat['z_words1'] - x_test_feat['z_words2'])
-    x_test_feat['z_avg_words'] = (x_test_feat['z_words1'] + x_test_feat['z_words2'])/2
-
-    # y_train = x_train['is_duplicate'].values
 
     return x_train_feat, x_test_feat
 
@@ -571,11 +436,13 @@ if __name__ == '__main__':
     df_train.apply(generate_hash_freq, axis = 1)
     df_test.apply(generate_hash_freq, axis = 1)
 
-    x_train, x_valid, y_train, y_valid = validate(df_train)
-    x_test = x_valid
+    x_train, x_test, y_train, y_valid = validate(df_train)
+    x_train_feat, x_test_feat = get_features(x_train, x_test)
+    final_train = pd.concat([x_train_feat, x_test_feat])
 
-    x_train_feat, x_valid_feat = get_features(x_train, x_valid)
-    res = run_xgb(x_train_feat, x_valid_feat, y_train, y_valid)
+    final_test = get_features_test(df_test)
+
+    res = run_xgb(x_train_feat, x_test_feat, y_train, y_valid)
 
     # res = controller(x_train, x_valid, y_train, y_valid)
 
