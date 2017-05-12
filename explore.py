@@ -65,9 +65,9 @@ def basic_nlp(row):
 
     # q1_tf = get_tf(q1_words)
     # q2_tf = get_tf(q2_words)
-
-    q1_words = str(row[3]).lower().split()
-    q2_words = str(row[4]).lower().split()
+    
+    q1_words = str(row.question1).lower().split()
+    q2_words = str(row.question2).lower().split()
 
     #modify this!
     if len(q1_words) == 0 or len(q2_words) == 0:
@@ -149,16 +149,16 @@ def basic_nlp(row):
         "question_type_same": question_type_same,
         "q1_stops": len(set(q1_words).intersection(stops))/len(q1_words),
         "q2_stops": len(set(q2_words).intersection(stops))/len(q2_words),
-        "q1_len": len(str(row[3])),
-        "q2_len": len(str(row[4])),
-        "len_diff": abs(len(str(row[3])) - len(str(row[4]))),
-        "len_avg": (len(str(row[3])) + len(str(row[4])))/2,
+        "q1_len": len(str(row.question1)),
+        "q2_len": len(str(row.question2)),
+        "len_diff": abs(len(str(row.question1)) - len(str(row.question2))),
+        "len_avg": (len(str(row.question1)) + len(str(row.question2)))/2,
         "q1_words": len(q1_words),
         "q2_words": len(q2_words),
         "words_diff": abs(len(q1_words) - len(q2_words)),
         "words_avg": (len(q1_words) + len(q2_words))/2,
-        "q1_caps_count": sum([1 for i in str(row[3]) if i.isupper()]),
-        "q2_caps_count": sum([1 for i in str(row[4]) if i.isupper()]),
+        "q1_caps_count": sum([1 for i in str(row.question1) if i.isupper()]),
+        "q2_caps_count": sum([1 for i in str(row.question2) if i.isupper()]),
 
     })
 
