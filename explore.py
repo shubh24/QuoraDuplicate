@@ -135,6 +135,17 @@ def basic_nlp(row):
     q1_ne = set([str(i) for i in q1_ne])
     q2_ne = set([str(i) for i in q2_ne])
 
+   if len(q1_ne) == 0:
+        q1_ne_ratio = 0
+    else:
+        q1_ne_ratio = len(q1_ne)/len(row["question1"].split())
+
+   if len(q2_ne) == 0:
+        q2_ne_ratio = 0
+    else:
+        q2_ne_ratio = len(q2_ne)/len(row["question2"].split())
+
+
     common_ne = len(q1_ne.intersection(q2_ne))
 
     if len(q1_ne) + len(q2_ne) == 0:
@@ -195,7 +206,9 @@ def basic_nlp(row):
         "q1_question": sum([1 for i in str(row.question1) if i == "?"]),
         "q2_question": sum([1 for i in str(row.question2) if i == "?"]),
         "common_ne_score": common_ne_score,
-        "common_nc_score": common_nc_score
+        "common_nc_score": common_nc_score,
+        "q1_ne_ratio": q1_ne_ratio,
+        "q2_ne_ratio": q2_ne_ratio
     })
 
 def get_word_bigrams(words):
