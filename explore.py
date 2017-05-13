@@ -126,6 +126,35 @@ def basic_nlp(row):
     except:
         simhash_diff = 0.5
 
+    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+    q1_ne = q1.ents
+    q2_ne = q2.ents
+
+    q1_ne = set([str(i) for i in q1_ne])
+    q2_ne = set([str(i) for i in q2_ne])
+
+    common_ne = len(q1_ne.intersection(q2_ne))
+
+    if len(q1_ne) + len(q2_ne) == 0:
+        common_ne_score = 0
+    else:
+       common_ne_score = common_ne/(len(q1_ne) + len(q2_ne) - common_ne)
+
+    q1_nc = q1.noun_chunks
+    q2_nc = q2.noun_chunks
+
+    q1_nc = set([str(i) for i in q1_nc])
+    q2_nc = set([str(i) for i in q2_nc])
+
+    common_nc = len(q1_nc.intersection(q2_nc))
+
+    if len(q1_nc) + len(q2_nc) == 0:
+        common_nc_score = 0
+    else:
+       common_nc_score = common_nc/(len(q1_nc) + len(q2_nc) - common_nc)
+
     fw_q1 = q1_words[0]
     fw_q2 = q2_words[0]
 
@@ -165,7 +194,8 @@ def basic_nlp(row):
         "q2_exclaim": sum([1 for i in str(row.question2) if i == "!"]),
         "q1_question": sum([1 for i in str(row.question1) if i == "?"]),
         "q2_question": sum([1 for i in str(row.question2) if i == "?"]),
-
+        "common_ne_score": common_ne_score,
+        "common_nc_score": common_nc_score
     })
 
 def get_word_bigrams(words):

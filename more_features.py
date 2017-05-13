@@ -99,6 +99,24 @@ def q2_question(row):
     except:
         return 0
 
+def common_chunk_score(row):
+
+    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+    q1_nc = q1.noun_chunks
+    q2_nc = q2.noun_chunks
+
+    q1_nc = set([str(i) for i in q1_nc])
+    q2_nc = set([str(i) for i in q2_nc])
+
+    common_nc = len(q1_nc.intersection(q2_nc))
+
+    if len(q1_nc) + len(q2_nc) == 0:
+        return 0
+    else:
+       return common_nc/(len(q1_nc) + len(q2_nc) - common_nc)
+
 def common_ne_score(row):
 
     q1 = nlp(unicode(str(row["question1"]), "utf-8"))
@@ -125,7 +143,8 @@ def get_features(x_train_feat):
     # x_train_feat["q2_exclaim"] = x_train_feat.apply(q2_sents, axis = 1)
     # x_train_feat["q1_question"] = x_train_feat.apply(q1_sents, axis = 1)
     # x_train_feat["q2_question"] = x_train_feat.apply(q2_sents, axis = 1)
-    x_train_feat["ne_score"] = x_train_feat.apply(common_ne_score, axis = 1)
+    # x_train_feat["ne_score"] = x_train_feat.apply(common_ne_score, axis = 1)
+    x_train_feat["nc_score"] = x_train_feat.apply(common_chunk_score, axis = 1)
 
     return x_train_feat
 
@@ -168,7 +187,7 @@ if __name__ == '__main__':
     x_train_feat.to_csv("x_train_feat.csv", index = False)
 
     x_label = x_train_feat.pop("is_duplicate")
-    x_train_feat = x_train_feat.iloc[:, range(5, 39)]
+    x_train_feat = x_train_feat.iloc[:, range(5, 40)]
 
     x_train, x_valid, y_train, y_valid = train_test_split(x_train_feat, x_label, test_size=0.2, random_state=4242, stratify = x_label)
 
