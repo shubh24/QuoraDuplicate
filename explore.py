@@ -153,12 +153,18 @@ def basic_nlp(row):
         "q2_len": len(str(row.question2)),
         "len_diff": abs(len(str(row.question1)) - len(str(row.question2))),
         "len_avg": (len(str(row.question1)) + len(str(row.question2)))/2,
+        "q1_sents": len(nltk.tokenize.sent_tokenize(row.question1)),
+        "q2_sents": len(nltk.tokenize.sent_tokenize(row.question2)),
         "q1_words": len(q1_words),
         "q2_words": len(q2_words),
         "words_diff": abs(len(q1_words) - len(q2_words)),
         "words_avg": (len(q1_words) + len(q2_words))/2,
         "q1_caps_count": sum([1 for i in str(row.question1) if i.isupper()]),
         "q2_caps_count": sum([1 for i in str(row.question2) if i.isupper()]),
+        "q1_exclaim": sum([1 for i in str(row.question1) if i == "!"]),
+        "q2_exclaim": sum([1 for i in str(row.question2) if i == "!"]),
+        "q1_question": sum([1 for i in str(row.question1) if i == "?"]),
+        "q2_question": sum([1 for i in str(row.question2) if i == "?"]),
 
     })
 
