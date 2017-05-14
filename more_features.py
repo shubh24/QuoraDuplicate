@@ -189,7 +189,9 @@ def get_features(x_train_feat):
     # x_train_feat["question_diff"] = abs(x_train_feat["q1_question"] - x_train_feat["q2_question"]) 
     # x_train_feat["ne_diff"] = abs(x_train_feat["q1_ne"] - x_train_feat["q2_ne"]) 
     # x_train_feat["quotes_diff"] = abs(x_train_feat["quotes_q1"] - x_train_feat["quotes_q2"]) 
-    x_train_feat["cluster_sim"] = x_train_feat.progress_apply(get_cluster_sim, axis = 1)
+    # x_train_feat["cluster_sim"] = x_train_feat.progress_apply(get_cluster_sim, axis = 1)
+    x_train_feat["q1_ne_hash_freq"] = x_train_feat.progress_apply(q1_ne_hash_freq, axis = 1)
+    x_train_feat["q2_ne_hash_freq"] = x_train_feat.progress_apply(q2_ne_hash_freq, axis = 1)
 
     return x_train_feat
 
@@ -273,6 +275,60 @@ def get_cluster_sim(row):
     else:
        return common_ne/(len(q1_combined_ne) + len(q2_combined_ne) - common_ne)
 
+def generate_ne_freq(to_be_clustered):
+
+    hash_table = {}
+
+    for index, row in to_be_clustered.iterrows():
+        print index
+
+        q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+        q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+        q1_ne = q1.ents
+        q2_ne = q2.ents
+
+        q1_ne = "-".join(set([str(i).lower() for i in q1_ne]))
+        q2_ne = "-".join(set([str(i).lower() for i in q2_ne]))
+        
+        hash_key1 = hash(q1_ne)
+        hash_key2 = hash(q2_ne)
+
+        if hash_key1 not in hash_table:
+            hash_table[hash_key1] = 1
+        else:
+            hash_table[hash_key1] += 1
+
+        if hash_key2 not in hash_table:
+            hash_table[hash_key2] = 1
+        else:
+            hash_table[hash_key2] += 1
+
+    return hash_table
+
+def q1_ne_hash_freq(row):
+
+    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+    q1_ne = q1.ents
+    q1_ne = "-".join(set([str(i).lower() for i in q1_ne]))
+    hash_key1 = hash(q1_ne)
+
+    if hash_key1 not in hash_table:
+        return 1
+    else:
+        return hash_table[hash_key1]
+
+def q2_ne_hash_freq(row):
+
+    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+    q2_ne = q2.ents
+    q2_ne = "-".join(set([str(i).lower() for i in q2_ne]))
+    hash_key1 = hash(q2_ne)
+
+    if hash_key1 not in hash_table:
+        return 1
+    else:
+        return hash_table[hash_key1]
 
 if __name__ == '__main__':
 
@@ -296,6 +352,8 @@ if __name__ == '__main__':
     # hash_table = {}
 
     # x_train_feat.apply(generate_hash_freq, axis = 1)
+
+    hash_table = generate_ne_freq(x_train_feat)
 
     x_train_feat = get_features(x_train_feat)
     x_train_feat.to_csv("x_train_feat.csv", index = False)
