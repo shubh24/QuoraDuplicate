@@ -189,9 +189,10 @@ def get_features(x_train_feat):
     # x_train_feat["question_diff"] = abs(x_train_feat["q1_question"] - x_train_feat["q2_question"]) 
     # x_train_feat["ne_diff"] = abs(x_train_feat["q1_ne"] - x_train_feat["q2_ne"]) 
     # x_train_feat["quotes_diff"] = abs(x_train_feat["quotes_q1"] - x_train_feat["quotes_q2"]) 
-    # x_train_feat["cluster_sim"] = x_train_feat.progress_apply(get_cluster_sim, axis = 1)
-    x_train_feat["q1_ne_hash_freq"] = x_train_feat.progress_apply(q1_ne_hash_freq, axis = 1)
-    x_train_feat["q2_ne_hash_freq"] = x_train_feat.progress_apply(q2_ne_hash_freq, axis = 1)
+    ## x_train_feat["cluster_sim"] = x_train_feat.progress_apply(get_cluster_sim, axis = 1)
+    # x_train_feat["q1_ne_hash_freq"] = x_train_feat.progress_apply(q1_ne_hash_freq, axis = 1)
+    # x_train_feat["q2_ne_hash_freq"] = x_train_feat.progress_apply(q2_ne_hash_freq, axis = 1)
+    # x_train_feat["chunk_hash_diff"] = abs(x_train_feat["q1_ne_hash_freq"] - x_train_feat["q2_ne_hash_freq"]) 
 
     return x_train_feat
 
@@ -304,12 +305,19 @@ def generate_ne_freq(to_be_clustered):
         else:
             hash_table[hash_key2] += 1
 
+    with open('cluster_hash.pickle', 'wb') as handle:
+        pickle.dump(cluster_hash, handle)
+
     return hash_table
 
 def q1_ne_hash_freq(row):
 
     q1 = nlp(unicode(str(row["question1"]), "utf-8"))
     q1_ne = q1.ents
+
+    if len(q1_ne) == 0:
+        return 1
+
     q1_ne = "-".join(set([str(i).lower() for i in q1_ne]))
     hash_key1 = hash(q1_ne)
 
@@ -322,6 +330,10 @@ def q2_ne_hash_freq(row):
 
     q2 = nlp(unicode(str(row["question2"]), "utf-8"))
     q2_ne = q2.ents
+
+    if len(q2_ne) == 0:
+        return 1
+
     q2_ne = "-".join(set([str(i).lower() for i in q2_ne]))
     hash_key1 = hash(q2_ne)
 
@@ -359,7 +371,7 @@ if __name__ == '__main__':
     x_train_feat.to_csv("x_train_feat.csv", index = False)
 
     x_label = x_train_feat.pop("is_duplicate")
-    x_train_feat = x_train_feat.iloc[:, range(5, 49)]
+    x_train_feat = x_train_feat.iloc[:, range(5, 52)]
 
     x_train, x_valid, y_train, y_valid = train_test_split(x_train_feat, x_label, test_size=0.2, random_state=4242, stratify = x_label)
 
