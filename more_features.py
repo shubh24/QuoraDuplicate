@@ -1,5 +1,6 @@
 from __future__ import division
 from collections import Counter
+import nltk
 from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
 from sklearn.metrics import log_loss
@@ -7,7 +8,6 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import math
-import nltk
 from nltk import ngrams
 from sklearn.cross_validation import train_test_split
 from string import punctuation
@@ -19,10 +19,11 @@ import plotly.plotly as py
 import plotly.graph_objs as go
 from matplotlib import pyplot
 from sklearn.manifold import TSNE
-
+import pickle
 import spacy
 nlp = spacy.load('en')
-
+from tqdm import tqdm, tqdm_pandas
+tqdm.pandas()
 from explore import *
 
 def run_xgb(x_train, x_valid, y_train, y_valid):
@@ -155,6 +156,20 @@ def count_q2_ne(row):
     else:
         return len(q2_ne)/len(row["question2"].split())
 
+def quotes_q1(row):
+
+    try:
+        return len(re.findall(r'\"(.+?)\"', row["question1"]))
+    except:
+        return 0
+
+def quotes_q2(row):
+
+    try:
+        return len(re.findall(r'\"(.+?)\"', row["question2"]))
+    except:
+        return 0
+
 def get_features(x_train_feat):
 
     # x_train_feat["q1_sents"] = x_train_feat.apply(q1_sents, axis = 1)
@@ -167,6 +182,14 @@ def get_features(x_train_feat):
     # x_train_feat["q1_ne"] = x_train_feat.apply(count_q1_ne, axis = 1)
     # x_train_feat["q2_ne"] = x_train_feat.apply(count_q2_ne, axis = 1)
     # x_train_feat["nc_score"] = x_train_feat.apply(common_chunk_score, axis = 1)
+    # x_train_feat["quotes_q1"] = x_train_feat.apply(quotes_q1, axis = 1)
+    # x_train_feat["quotes_q2"] = x_train_feat.apply(quotes_q2, axis = 1)
+    # x_train_feat["sents_diff"] = abs(x_train_feat["q1_sents"] - x_train_feat["q2_sents"])
+    # x_train_feat["exclaim_diff"] = abs(x_train_feat["q1_exclaim"] - x_train_feat["q2_exclaim"]) 
+    # x_train_feat["question_diff"] = abs(x_train_feat["q1_question"] - x_train_feat["q2_question"]) 
+    # x_train_feat["ne_diff"] = abs(x_train_feat["q1_ne"] - x_train_feat["q2_ne"]) 
+    # x_train_feat["quotes_diff"] = abs(x_train_feat["quotes_q1"] - x_train_feat["quotes_q2"]) 
+    x_train_feat["cluster_sim"] = x_train_feat.progress_apply(get_cluster_sim, axis = 1)
 
     return x_train_feat
 
@@ -185,10 +208,79 @@ def generate_hash_freq(row):
     else:
         hash_table[hash_key2] += 1
 
+
+def cluster(to_be_clustered):
+
+    cluster_hash = {}
+
+    for index, row in to_be_clustered.iterrows():
+        print index
+        q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+        q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+        q1_ne = q1.ents
+        q2_ne = q2.ents
+
+        q1_ne = set([str(i) for i in q1_ne])
+        q2_ne = set([str(i) for i in q2_ne])
+
+        for i in q1_ne:
+   
+            if i not in cluster_hash:
+                cluster_hash[i] = [j for j in q1_ne]
+            else:
+                cluster_hash[i] = list(set(cluster_hash[i] + [j for j in q1_ne]))
+
+        for i in q2_ne:
+   
+            if i not in cluster_hash:
+                cluster_hash[i] = [j for j in q2_ne]
+            else:
+                cluster_hash[i] = list(set(cluster_hash[i] + [j for j in q2_ne]))
+
+    return cluster_hash
+
+def get_cluster_sim(row):
+
+    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+    q1_ne = q1.ents
+    q2_ne = q2.ents
+
+    q1_ne = set([str(i) for i in q1_ne])
+    q2_ne = set([str(i) for i in q2_ne])
+
+    q1_combined_ne = []
+    q2_combined_ne = []
+
+    for i in q1_ne:
+        if i not in cluster_hash:
+            continue
+        else:
+            q1_combined_ne = list(set(q1_combined_ne + cluster_hash[i]))
+
+    for i in q2_ne:
+        if i not in cluster_hash:
+            continue
+        else:
+            q2_combined_ne = list(set(q2_combined_ne + cluster_hash[i]))
+
+    common_ne = len(set(q1_combined_ne).intersection(set(q2_combined_ne)))
+
+    if common_ne == 0:
+        return 0
+    else:
+       return common_ne/(len(q1_combined_ne) + len(q2_combined_ne) - common_ne)
+
+
 if __name__ == '__main__':
 
     x_train_feat = pd.read_csv('./x_train_feat.csv').fillna("")
     x_train_feat['spacy_sim'] = pd.to_numeric(pd.Series(x_train_feat['spacy_sim']), errors = "coerce")
+
+    with open('cluster_hash.pickle', 'rb') as handle:
+        cluster_hash = pickle.load(handle)
 
     # df_train = pd.read_csv('./train.csv').fillna("")
     # x_train_feat = pd.concat([df_train, x_train_feat], axis = 1)
@@ -209,7 +301,7 @@ if __name__ == '__main__':
     x_train_feat.to_csv("x_train_feat.csv", index = False)
 
     x_label = x_train_feat.pop("is_duplicate")
-    x_train_feat = x_train_feat.iloc[:, range(5, 42)]
+    x_train_feat = x_train_feat.iloc[:, range(5, 49)]
 
     x_train, x_valid, y_train, y_valid = train_test_split(x_train_feat, x_label, test_size=0.2, random_state=4242, stratify = x_label)
 
