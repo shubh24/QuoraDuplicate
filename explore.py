@@ -50,7 +50,6 @@ def get_tf(text):
 
     return tf
 
-
 def tuple_similarity(q1_words, q2_words):
 
     if len(q1_words) == 0 or len(q2_words) == 0:
@@ -118,13 +117,13 @@ def basic_nlp(row):
     common_pos_score = np.sum([weights.get(w, 0) for w in common_pos])
     all_pos_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_pos_score
 
-    sequence1 = get_word_bigrams(q1_words)
-    sequence2 = get_word_bigrams(q2_words)
+    # sequence1 = get_word_bigrams(q1_words)
+    # sequence2 = get_word_bigrams(q2_words)
 
-    try:
-        simhash_diff = Simhash(sequence1).distance(Simhash(sequence2))/64
-    except:
-        simhash_diff = 0.5
+    # try:
+    #     simhash_diff = Simhash(sequence1).distance(Simhash(sequence2))/64
+    # except:
+    #     simhash_diff = 0.5
 
     q1 = nlp(unicode(str(row["question1"]), "utf-8"))
     q2 = nlp(unicode(str(row["question2"]), "utf-8"))
@@ -135,16 +134,15 @@ def basic_nlp(row):
     q1_ne = set([str(i) for i in q1_ne])
     q2_ne = set([str(i) for i in q2_ne])
 
-   if len(q1_ne) == 0:
+    if len(q1_ne) == 0:
         q1_ne_ratio = 0
     else:
         q1_ne_ratio = len(q1_ne)/len(row["question1"].split())
 
-   if len(q2_ne) == 0:
+    if len(q2_ne) == 0:
         q2_ne_ratio = 0
     else:
         q2_ne_ratio = len(q2_ne)/len(row["question2"].split())
-
 
     common_ne = len(q1_ne.intersection(q2_ne))
 
@@ -174,6 +172,62 @@ def basic_nlp(row):
     else:
         question_type_same = 0
 
+    try:
+        q1_quotes = len(re.findall(r'\"(.+?)\"', row["question1"]))
+    except:
+        q1_quotes = 0
+
+    try:
+        q2_quotes = len(re.findall(r'\"(.+?)\"', row["question2"]))
+    except:
+        q2_quotes = 0
+
+    with open('hash_table_ne.pickle', 'rb') as handle:
+        hash_table_ne = pickle.load(handle)
+
+    if len(q1_ne) == 0:
+        q1_ne_hash_freq = 1
+    else:
+        hash_key1 = hash("-".join(set([str(i).lower() for i in q1_ne])))
+
+        if hash_key1 not in hash_table_ne:
+            q1_ne_hash_freq = 1
+        else:
+            q1_ne_hash_freq = hash_table_ne[hash_key1]
+
+    if len(q2_ne) == 0:
+        q2_ne_hash_freq = 1
+    else:
+        hash_key2 = hash("-".join(set([str(i).lower() for i in q2_ne])))
+
+        if hash_key2 not in hash_table_ne:
+            q2_ne_hash_freq = 1
+        else:
+            q2_ne_hash_freq = hash_table_ne[hash_key2]
+
+    q1_sents = len(nltk.tokenize.sent_tokenize(row.question1))
+    q2_sents = len(nltk.tokenize.sent_tokenize(row.question2))
+
+    q1_exclaim = sum([1 for i in str(row.question1) if i == "!"])
+    q2_exclaim = sum([1 for i in str(row.question2) if i == "!"])
+
+    q1_question = sum([1 for i in str(row.question1) if i == "?"])
+    q2_question = sum([1 for i in str(row.question2) if i == "?"])
+
+    hash_key1 = hash(str(row["question1"]).lower())
+    if hash_key1 in hash_table:
+        q1_hash_freq = hash_table[hash_key1]
+    else:
+        q1_hash_freq = 1
+
+    hash_key2 = hash(str(row["question2"]).lower())
+    if hash_key2 in hash_table:
+        q2_hash_freq = hash_table[hash_key2]
+    else:
+        q2_hash_freq = 1
+
+    spacy_sim = q1.similarity(q2)
+
     return pd.Series({
 
         "weighted_word_match_ratio" : common_words_score/all_words_score,
@@ -185,7 +239,7 @@ def basic_nlp(row):
         "bigram_score": bigram_score,
         "trigram_score": trigram_score,
         "pos_score": common_pos_score/all_pos_score,
-        "simhash_diff": simhash_diff,
+        # "simhash_diff": simhash_diff,
         "question_type_same": question_type_same,
         "q1_stops": len(set(q1_words).intersection(stops))/len(q1_words),
         "q2_stops": len(set(q2_words).intersection(stops))/len(q2_words),
@@ -193,23 +247,38 @@ def basic_nlp(row):
         "q2_len": len(str(row.question2)),
         "len_diff": abs(len(str(row.question1)) - len(str(row.question2))),
         "len_avg": (len(str(row.question1)) + len(str(row.question2)))/2,
-        "q1_sents": len(nltk.tokenize.sent_tokenize(row.question1)),
-        "q2_sents": len(nltk.tokenize.sent_tokenize(row.question2)),
+        "q1_sents": q1_sents,
+        "q2_sents": q2_sents,
+        "sents_diff": abs(q1_sents - q2_sents),
         "q1_words": len(q1_words),
         "q2_words": len(q2_words),
         "words_diff": abs(len(q1_words) - len(q2_words)),
         "words_avg": (len(q1_words) + len(q2_words))/2,
         "q1_caps_count": sum([1 for i in str(row.question1) if i.isupper()]),
         "q2_caps_count": sum([1 for i in str(row.question2) if i.isupper()]),
-        "q1_exclaim": sum([1 for i in str(row.question1) if i == "!"]),
-        "q2_exclaim": sum([1 for i in str(row.question2) if i == "!"]),
-        "q1_question": sum([1 for i in str(row.question1) if i == "?"]),
-        "q2_question": sum([1 for i in str(row.question2) if i == "?"]),
-        "common_ne_score": common_ne_score,
-        "common_nc_score": common_nc_score,
+        "q1_exclaim": q1_exclaim,
+        "q2_exclaim": q2_exclaim,
+        "exclaim_diff": abs(q1_exclaim - q2_exclaim),
+        "q1_question": q1_question,
+        "q2_question": q2_question,
+        "question_diff": abs(q1_question - q2_question),
+        "ne_score": common_ne_score,
+        "nc_score": common_nc_score,
         "q1_ne_ratio": q1_ne_ratio,
-        "q2_ne_ratio": q2_ne_ratio
-    })
+        "q2_ne_ratio": q2_ne_ratio,
+        "ne_diff": abs(q1_ne_ratio - q2_ne_ratio),
+        "q1_quotes": q1_quotes,
+        "q2_quotes": q2_quotes,
+        "quotes_diff": abs(q1_quotes - q2_quotes),
+        "q1_ne_hash_freq": q1_ne_hash_freq,
+        "q2_ne_hash_freq": q2_ne_hash_freq,
+        "chunk_hash_diff": abs(q1_ne_hash_freq - q2_ne_hash_freq),
+        "q1_hash_freq": q1_hash_freq,
+        "q2_hash_freq": q2_hash_freq,
+        "q_freq_avg": (q1_hash_freq + q2_hash_freq)/2,
+        "freq_diff": abs(q1_hash_freq - q2_hash_freq),
+        "spacy_sim": spacy_sim
+    }) 
 
 def get_word_bigrams(words):
 
@@ -235,129 +304,6 @@ def generate_hash_freq(row):
         hash_table[hash_key2] = 1
     else:
         hash_table[hash_key2] += 1
-
-def q1_hash_freq(row):
-
-    hash_key1 = hash(str(row["question1"]).lower())
-    return hash_table[hash_key1]
-
-def q2_hash_freq(row):
-
-    hash_key2 = hash(str(row["question2"]).lower())
-    return hash_table[hash_key2]
-
-def spacy_sim(row):
-
-    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
-    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
-
-    return q1.similarity(q2)
-
-def common_ne_score(row):
-
-    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
-    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
-
-    q1_ne = q1.ents
-    q2_ne = q2.ents
-
-    common_ne = len(list(set(q1_ne).intersection(q2_ne)))
-
-    if len(q1_ne) + len(q2_ne) == 0:
-        return 0
-    else:
-       return common_ne/(len(q1_ne) + len(q2_ne) - common_ne)
-
-
-def cluster(to_be_clustered):
-
-    cluster_hash = {}
-    inverse_hash = {}
-    cluster_counter = 1
-
-    for index, row in to_be_clustered.iterrows():
-        q1_words = tuple(row[0])
-        q2_words = tuple(row[1])
-        is_duplicate = row[2]
-
-        if is_duplicate == 1:
-            if q1_words not in cluster_hash and q2_words not in cluster_hash:
-                cluster_hash[q1_words] = cluster_counter
-                cluster_hash[q2_words] = cluster_counter
-                inverse_hash[cluster_counter] = [q1_words, q2_words]
-                cluster_counter += 1
-
-            elif q1_words in cluster_hash and q2_words not in cluster_hash:
-                cluster_hash[q2_words] = cluster_hash[q1_words]
-                inverse_hash[cluster_hash[q1_words]].append(q2_words)
-
-            elif q2_words in cluster_hash and q1_words not in cluster_hash:
-                cluster_hash[q1_words] = cluster_hash[q2_words]
-                inverse_hash[cluster_hash[q2_words]].append(q1_words)                
-
-        elif is_duplicate == 0:
-            if q1_words not in cluster_hash:
-                cluster_hash[q1_words] = cluster_counter
-                inverse_hash[cluster_counter] = [q1_words]
-                cluster_counter += 1
-
-            if q2_words not in cluster_hash:
-                cluster_hash[q2_words] = cluster_counter
-                inverse_hash[cluster_counter] = [q2_words]
-                cluster_counter += 1
-
-    for i in inverse_hash:
-        tuple_sum = tuple()
-        for j in inverse_hash[i]:
-            tuple_sum += j
-        inverse_hash[i] = tuple(set(tuple_sum))
-
-    return cluster_hash, inverse_hash
-
-def get_cluster_sim(row):
-
-    q1 = tuple(row["q1_words"])
-    q2 = tuple(row["q2_words"])
-
-    if q1 in cluster_hash and q2 in cluster_hash:
-        if cluster_hash[q1] == cluster_hash[q2]:
-            return 1
-        else:
-            return 0
-    else:
-        return 0
-    #     else:
-    #         return tuple_similarity(inverse_hash[cluster_hash[q1]], inverse_hash[cluster_hash[q2]])
-
-    # elif q1 in cluster_hash and q2 not in cluster_hash:
-    #     return tuple_similarity(inverse_hash[cluster_hash[q1]], q2)
-
-    # elif q2 in cluster_hash and q1 not in cluster_hash:
-    #     return tuple_similarity(inverse_hash[cluster_hash[q2]], q1)
-
-    # else:
-    #     return tuple_similarity(q1, q2)
-
-def get_features(x_train, x_test):
-    
-    x_train_feat = x_train.apply(basic_nlp, axis=1)
-    x_test_feat = x_test.apply(basic_nlp, axis=1)
-
-    x_train_feat["q1_freq"] = x_train.apply(q1_hash_freq, axis = 1)
-    x_train_feat["q2_freq"] = x_train.apply(q2_hash_freq, axis = 1)
-    x_train_feat["q_freq_avg"] = (x_train_feat["q1_freq"] + x_train_feat["q2_freq"])/2
-
-    x_test_feat["q1_freq"] = x_test.apply(q1_hash_freq, axis = 1)
-    x_test_feat["q2_freq"] = x_test.apply(q2_hash_freq, axis = 1)
-    x_test_feat["q_freq_avg"] = (x_test_feat["q1_freq"] + x_test_feat["q2_freq"])/2
-
-    x_train_feat["spacy_sim"] = x_train.apply(spacy_sim, axis = 1)
-    x_test_feat["spacy_sim"] = x_test.apply(spacy_sim, axis = 1)
-
-    # x_train_feat["common_ne_score"] = x_train.apply(common_ne_score, axis = 1)
-    # x_test_feat["common_ne_score"] = x_test.apply(common_ne_score, axis = 1)
-
-    return x_train_feat, x_test_feat
 
 def oversample(x_train, y_train):
 
@@ -397,8 +343,8 @@ def run_xgb(x_train, x_valid, y_train, y_valid):
 
     bst = xgb.train(params, d_train, 1000, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
-    d_test = xgb.DMatrix(x_test_feat)
-    p_test = bst.predict(d_test)
+    # d_test = xgb.DMatrix(x_test_feat)
+    # p_test = bst.predict(d_test)
 
     xgb.plot_importance(bst)
     pyplot.show()
@@ -465,28 +411,36 @@ def controller(x_train, x_valid, y_train, y_valid):
 
 if __name__ == '__main__':
     
-    df_train = pd.read_csv('./train.csv').fillna("")
-    df_test = pd.read_csv('./test.csv').fillna("")
+        df_train = pd.read_csv('./train.csv').fillna("")
+        df_test = pd.read_csv('./test.csv').fillna("")
 
-    train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
-    test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
+        train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
+        test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
 
-    # tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
-    # tfidf.fit_transform(train_qs[0:2500])
+        # tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
+        # tfidf.fit_transform(train_qs[0:2500])
 
-    words = (" ".join(train_qs)).lower().split()
-    counts = Counter(words)
-    weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
+        words = (" ".join(train_qs)).lower().split()
+        counts = Counter(words)
+        weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
 
-    stops = set(stopwords.words("english"))
+        stops = set(stopwords.words("english"))
 
     hash_table = {}
 
     df_train.apply(generate_hash_freq, axis = 1)
-    df_test.apply(generate_hash_freq, axis = 1)
+    # df_test.apply(generate_hash_freq, axis = 1)
+    with open('hash_table.pickle', 'wb') as handle:
+        pickle.dump(hash_table, handle)
+
+    with open('hash_table.pickle', 'rb') as handle:
+        hash_table = pickle.load(handle)
 
     x_train, x_test, y_train, y_valid = validate(df_train)
-    x_train_feat, x_test_feat = get_features(x_train, x_test)
+    # x_train_feat, x_test_feat = get_features(x_train, x_test)
+    x_train_feat = x_train.apply(basic_nlp, axis = 1)
+    x_test_feat = x_test.apply(basic_nlp, axis = 1)
+
     final_train = pd.concat([x_train_feat, x_test_feat])
 
     final_test = get_features_test(df_test)

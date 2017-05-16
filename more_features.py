@@ -179,19 +179,21 @@ def get_features(x_train_feat):
     # x_train_feat["q1_question"] = x_train_feat.apply(q1_sents, axis = 1)
     # x_train_feat["q2_question"] = x_train_feat.apply(q2_sents, axis = 1)
     # x_train_feat["ne_score"] = x_train_feat.apply(common_ne_score, axis = 1)
-    # x_train_feat["q1_ne"] = x_train_feat.apply(count_q1_ne, axis = 1)
-    # x_train_feat["q2_ne"] = x_train_feat.apply(count_q2_ne, axis = 1)
+    # x_train_feat["q1_ne_ratio"] = x_train_feat.apply(count_q1_ne, axis = 1)
+    # x_train_feat["q2_ne_ratio"] = x_train_feat.apply(count_q2_ne, axis = 1)
+    ##change names of q1_ne to q1_ne_ratio, q2_ne to q2_ne_ratio
     # x_train_feat["nc_score"] = x_train_feat.apply(common_chunk_score, axis = 1)
     # x_train_feat["quotes_q1"] = x_train_feat.apply(quotes_q1, axis = 1)
     # x_train_feat["quotes_q2"] = x_train_feat.apply(quotes_q2, axis = 1)
-    # x_train_feat["sents_diff"] = abs(x_train_feat["q1_sents"] - x_train_feat["q2_sents"])
-    # x_train_feat["exclaim_diff"] = abs(x_train_feat["q1_exclaim"] - x_train_feat["q2_exclaim"]) 
-    # x_train_feat["question_diff"] = abs(x_train_feat["q1_question"] - x_train_feat["q2_question"]) 
-    # x_train_feat["ne_diff"] = abs(x_train_feat["q1_ne"] - x_train_feat["q2_ne"]) 
-    # x_train_feat["quotes_diff"] = abs(x_train_feat["quotes_q1"] - x_train_feat["quotes_q2"]) 
     ## x_train_feat["cluster_sim"] = x_train_feat.progress_apply(get_cluster_sim, axis = 1)
     # x_train_feat["q1_ne_hash_freq"] = x_train_feat.progress_apply(q1_ne_hash_freq, axis = 1)
     # x_train_feat["q2_ne_hash_freq"] = x_train_feat.progress_apply(q2_ne_hash_freq, axis = 1)
+
+    # x_train_feat["sents_diff"] = abs(x_train_feat["q1_sents"] - x_train_feat["q2_sents"])
+    # x_train_feat["exclaim_diff"] = abs(x_train_feat["q1_exclaim"] - x_train_feat["q2_exclaim"]) 
+    # x_train_feat["question_diff"] = abs(x_train_feat["q1_question"] - x_train_feat["q2_question"]) 
+    # x_train_feat["ne_diff"] = abs(x_train_feat["q1_ne_ratio"] - x_train_feat["q2_ne_ratio"]) 
+    # x_train_feat["quotes_diff"] = abs(x_train_feat["quotes_q1"] - x_train_feat["quotes_q2"]) 
     # x_train_feat["chunk_hash_diff"] = abs(x_train_feat["q1_ne_hash_freq"] - x_train_feat["q2_ne_hash_freq"]) 
 
     return x_train_feat
@@ -305,9 +307,6 @@ def generate_ne_freq(to_be_clustered):
         else:
             hash_table[hash_key2] += 1
 
-    with open('cluster_hash.pickle', 'wb') as handle:
-        pickle.dump(cluster_hash, handle)
-
     return hash_table
 
 def q1_ne_hash_freq(row):
@@ -335,20 +334,23 @@ def q2_ne_hash_freq(row):
         return 1
 
     q2_ne = "-".join(set([str(i).lower() for i in q2_ne]))
-    hash_key1 = hash(q2_ne)
+    hash_key2 = hash(q2_ne)
 
-    if hash_key1 not in hash_table:
+    if hash_key2 not in hash_table:
         return 1
     else:
-        return hash_table[hash_key1]
+        return hash_table[hash_key2]
 
 if __name__ == '__main__':
 
     x_train_feat = pd.read_csv('./x_train_feat.csv').fillna("")
     x_train_feat['spacy_sim'] = pd.to_numeric(pd.Series(x_train_feat['spacy_sim']), errors = "coerce")
 
-    with open('cluster_hash.pickle', 'rb') as handle:
-        cluster_hash = pickle.load(handle)
+    # with open('cluster_hash.pickle', 'rb') as handle:
+    #     cluster_hash = pickle.load(handle)
+
+    with open('hash_table_ne.pickle', 'rb') as handle:
+        hash_table_ne = pickle.load(handle)
 
     # df_train = pd.read_csv('./train.csv').fillna("")
     # x_train_feat = pd.concat([df_train, x_train_feat], axis = 1)
@@ -365,13 +367,17 @@ if __name__ == '__main__':
 
     # x_train_feat.apply(generate_hash_freq, axis = 1)
 
-    hash_table = generate_ne_freq(x_train_feat)
+    ##DO THIS AND SAVE AS PICKLE
+    hash_table_ne = generate_ne_freq(x_train_feat)
+    with open('hash_table_ne.pickle', 'wb') as handle:
+        pickle.dump(hash_table_ne, handle)
+
 
     x_train_feat = get_features(x_train_feat)
     x_train_feat.to_csv("x_train_feat.csv", index = False)
 
     x_label = x_train_feat.pop("is_duplicate")
-    x_train_feat = x_train_feat.iloc[:, range(5, 52)]
+    x_train_feat = x_train_feat.iloc[:, range(5, 53)]
 
     x_train, x_valid, y_train, y_valid = train_test_split(x_train_feat, x_label, test_size=0.2, random_state=4242, stratify = x_label)
 
