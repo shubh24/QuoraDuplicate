@@ -98,25 +98,6 @@ def basic_nlp(row):
     else:
         trigram_score = common_trigrams/(len(trigrams_q1.union(trigrams_q2)))    
 
-    pos_tag1 = nltk.pos_tag(q1_words)
-    pos_tag2 = nltk.pos_tag(q2_words)
-    pos_hash = {}
-    common_pos = []
-    
-    for tag in pos_tag1:
-        if tag[1] not in pos_hash:
-            pos_hash.update({tag[1]:[tag[0]]})
-        else:
-            pos_hash[tag[1]].append(tag[0])
-    for tag in pos_tag2:
-        if tag[1] not in pos_hash:
-            continue
-        if tag[0] in pos_hash[tag[1]]:
-            common_pos.append(tag[0])
-
-    common_pos_score = np.sum([weights.get(w, 0) for w in common_pos])
-    all_pos_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_pos_score
-
     # sequence1 = get_word_bigrams(q1_words)
     # sequence2 = get_word_bigrams(q2_words)
 
@@ -150,6 +131,40 @@ def basic_nlp(row):
         common_ne_score = 0
     else:
        common_ne_score = common_ne/(len(q1_ne) + len(q2_ne) - common_ne)
+
+    pos_hash = {}
+    common_pos = []
+
+    for word in q1:
+        word_tag = str(word.tag_)
+        word_text = str(word.text)
+
+        if word_tag not in pos_hash:
+            pos_hash.update({word_tag : [word_text]})
+        else:
+            pos_hash[word_tag].append(word_text)
+
+    for word in q2:
+        if word_tag not in pos_hash:
+            continue
+        if word_text in pos_hash[word_tag]:
+            common_pos.append(word_text)
+
+    common_pos_score = np.sum([weights.get(w, 0) for w in common_pos])
+    all_pos_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_pos_score
+
+    q1_pronouns_count = 0
+    q2_pronouns_count = 0
+
+    for word in q1:
+        if str(word.tag_) == "PRP":
+            q1_pronouns_count += 1
+
+    for word in q2:
+        if str(word.tag_) == "PRP":
+            q2_pronouns_count += 1
+
+    pronouns_diff = abs(q1_pronouns_count - q2_pronouns_count)
 
     q1_nc = q1.noun_chunks
     q2_nc = q2.noun_chunks
@@ -277,7 +292,10 @@ def basic_nlp(row):
         "q2_hash_freq": q2_hash_freq,
         "q_freq_avg": (q1_hash_freq + q2_hash_freq)/2,
         "freq_diff": abs(q1_hash_freq - q2_hash_freq),
-        "spacy_sim": spacy_sim
+        "spacy_sim": spacy_sim,
+        "q1_pronouns_count": q1_pronouns_count,
+        "q2_pronouns_count": q2_pronouns_count,
+        "pronouns_diff": pronouns_diff
     }) 
 
 def get_word_bigrams(words):
@@ -411,23 +429,22 @@ def controller(x_train, x_valid, y_train, y_valid):
 
 if __name__ == '__main__':
     
-        df_train = pd.read_csv('./train.csv').fillna("")
-        df_test = pd.read_csv('./test.csv').fillna("")
+    df_train = pd.read_csv('./train.csv').fillna("")
+    df_test = pd.read_csv('./test.csv').fillna("")
 
-        train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
-        test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
+    train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
+    test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
 
-        # tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
-        # tfidf.fit_transform(train_qs[0:2500])
+    # tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
+    # tfidf.fit_transform(train_qs[0:2500])
 
-        words = (" ".join(train_qs)).lower().split()
-        counts = Counter(words)
-        weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
+    words = (" ".join(train_qs)).lower().split()
+    counts = Counter(words)
+    weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
 
-        stops = set(stopwords.words("english"))
+    stops = set(stopwords.words("english"))
 
     hash_table = {}
-
     df_train.apply(generate_hash_freq, axis = 1)
     # df_test.apply(generate_hash_freq, axis = 1)
     with open('hash_table.pickle', 'wb') as handle:
@@ -437,7 +454,6 @@ if __name__ == '__main__':
         hash_table = pickle.load(handle)
 
     x_train, x_test, y_train, y_valid = validate(df_train)
-    # x_train_feat, x_test_feat = get_features(x_train, x_test)
     x_train_feat = x_train.apply(basic_nlp, axis = 1)
     x_test_feat = x_test.apply(basic_nlp, axis = 1)
 
