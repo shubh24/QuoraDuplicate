@@ -136,19 +136,16 @@ def basic_nlp(row):
     common_pos = []
 
     for word in q1:
-        word_tag = str(word.tag_)
-        word_text = str(word.text)
-
-        if word_tag not in pos_hash:
-            pos_hash.update({word_tag : [word_text]})
+        if word.tag_ not in pos_hash:
+            pos_hash.update({word.tag_ : [word.text]})
         else:
-            pos_hash[word_tag].append(word_text)
+            pos_hash[word.tag_].append(word.text)
 
     for word in q2:
-        if word_tag not in pos_hash:
+        if word.tag_ not in pos_hash:
             continue
-        if word_text in pos_hash[word_tag]:
-            common_pos.append(word_text)
+        if word.text in pos_hash[word.tag_]:
+            common_pos.append(word.text)
 
     common_pos_score = np.sum([weights.get(w, 0) for w in common_pos])
     all_pos_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words]) - common_pos_score
@@ -197,8 +194,8 @@ def basic_nlp(row):
     except:
         q2_quotes = 0
 
-    with open('hash_table_ne.pickle', 'rb') as handle:
-        hash_table_ne = pickle.load(handle)
+    # with open('hash_table_ne.pickle', 'rb') as handle:
+    #     hash_table_ne = pickle.load(handle)
 
     if len(q1_ne) == 0:
         q1_ne_hash_freq = 1
@@ -220,8 +217,14 @@ def basic_nlp(row):
         else:
             q2_ne_hash_freq = hash_table_ne[hash_key2]
 
-    q1_sents = len(nltk.tokenize.sent_tokenize(row.question1))
-    q2_sents = len(nltk.tokenize.sent_tokenize(row.question2))
+    try:
+        q1_sents = len(nltk.tokenize.sent_tokenize(row.question1))
+    except:
+        q1_sents = 1
+    try:
+        q2_sents = len(nltk.tokenize.sent_tokenize(row.question2))
+    except:
+        q2_sents = 1
 
     q1_exclaim = sum([1 for i in str(row.question1) if i == "!"])
     q2_exclaim = sum([1 for i in str(row.question2) if i == "!"])
@@ -453,18 +456,46 @@ if __name__ == '__main__':
     with open('hash_table.pickle', 'rb') as handle:
         hash_table = pickle.load(handle)
 
+    with open('hash_table_ne.pickle', 'rb') as handle:
+        hash_table_ne = pickle.load(handle)
+
+    #Validation
     x_train, x_test, y_train, y_valid = validate(df_train)
     x_train_feat = x_train.apply(basic_nlp, axis = 1)
     x_test_feat = x_test.apply(basic_nlp, axis = 1)
-
-    final_train = pd.concat([x_train_feat, x_test_feat])
-
-    final_test = get_features_test(df_test)
-
     res = run_xgb(x_train_feat, x_test_feat, y_train, y_valid)
 
     # res = controller(x_train, x_valid, y_train, y_valid)
 
     #Compare res & y_valid
+
+    #Real Testing
+    x_train = df_train.apply(basic_nlp, axis = 1)
+    x_train.to_csv('x_train.csv', index=False)
+    %reset_selective x_train 
+
+    x_test_1 = df_test[0:390000].apply(basic_nlp, axis = 1)
+    x_test_1.to_csv('x_test_1.csv', index=False)   
+    %reset_selective x_test_1   
+
+    x_test_2 = df_test[390000:780000].apply(basic_nlp, axis = 1)
+    x_test_2.to_csv('x_test_2.csv', index=False)
+    %reset_selective x_test_2   
+
+    x_test_3 = df_test[780000:1170000].apply(basic_nlp, axis = 1)
+    x_test_3.to_csv('x_test_3.csv', index=False)   
+    %reset_selective x_test_3   
+
+    x_test_4 = df_test[1170000:1560000].apply(basic_nlp, axis = 1)
+    x_test_4.to_csv('x_test_4.csv', index=False)   
+    %reset_selective x_test_4   
+
+    x_test_5 = df_test[1560000:1950000].apply(basic_nlp, axis = 1)
+    x_test_5.to_csv('x_test_5.csv', index=False)   
+    %reset_selective x_test_5   
+
+    x_test_6 = df_test[1950000:2345796].apply(basic_nlp, axis = 1)
+    x_test_6.to_csv('x_test_6.csv', index=False)   
+    %reset_selective x_test_6   
 
     # submit(res)
