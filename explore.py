@@ -19,6 +19,7 @@ import plotly.plotly as py
 import plotly.graph_objs as go
 from matplotlib import pyplot
 from sklearn.manifold import TSNE
+import pickle
 
 import spacy
 nlp = spacy.load('en')
@@ -326,10 +327,10 @@ def generate_hash_freq(row):
     else:
         hash_table[hash_key2] += 1
 
-def oversample(x_train, y_train):
+def oversample(x_train):
 
-    pos_train = x_train[y_train == 1]
-    neg_train = x_train[y_train == 0]
+    neg_train = x_train[x_train.is_duplicate == 0]
+    pos_train = x_train[x_train.is_duplicate == 1]
 
     #Oversampling negative class
     p = 0.165
@@ -340,9 +341,10 @@ def oversample(x_train, y_train):
         scale -=1
     neg_train = pd.concat([neg_train, neg_train[:int(scale * len(neg_train))]])
 
-    return pos_train, neg_train
+    return pd.concat([pos_train, neg_train])
 
-def run_xgb(x_train, x_valid, y_train, y_valid):
+# def run_xgb(x_train, x_valid, y_train, y_valid):
+def run_xgb(x_train, x_test, x_label):
 
     # x_train = pd.concat([pos_train, neg_train]) #Concat positive and negative
     # y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist() #Putting in 1 and 0
@@ -357,15 +359,14 @@ def run_xgb(x_train, x_valid, y_train, y_valid):
     params['max_depth'] = 6
     params['silent'] = 1
 
-    d_train = xgb.DMatrix(x_train, label=y_train)
-    d_valid = xgb.DMatrix(x_valid, label=y_valid)
+    d_train = xgb.DMatrix(x_train, label=x_label)
+    d_test = xgb.DMatrix(x_test)
 
-    watchlist = [(d_train, 'train'), (d_valid, 'valid')]
+    watchlist = [(d_train, 'train')]
 
-    bst = xgb.train(params, d_train, 1000, watchlist, early_stopping_rounds=50, verbose_eval=50)
+    bst = xgb.train(params, d_train, 1300, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
-    # d_test = xgb.DMatrix(x_test_feat)
-    # p_test = bst.predict(d_test)
+    p_test = bst.predict(d_test)
 
     xgb.plot_importance(bst)
     pyplot.show()
@@ -419,16 +420,6 @@ def validate(training):
     x_train, x_valid, y_train, y_valid = train_test_split(training, training_res, test_size=0.2, random_state=4242, stratify = training_res)
 
     return(x_train, x_valid, y_train, y_valid)
-
-def controller(x_train, x_valid, y_train, y_valid):
-
-    # x_train, x_test_feat = get_features(x_train, x_valid)
-
-    # pos_train, neg_train = oversample(x_train, y_train) #Taking lite for now
-
-    return run_xgb(x_train, x_valid, y_train, y_valid)
-
-    # run_tsne(pos_train, neg_train, x_test_feat)
 
 if __name__ == '__main__':
     
@@ -494,8 +485,72 @@ if __name__ == '__main__':
     x_test_5.to_csv('x_test_5.csv', index=False)   
     %reset_selective x_test_5   
 
-    x_test_6 = df_test[1950000:2345796].apply(basic_nlp, axis = 1)
+    x_test_6 = df_test[1950000:].apply(basic_nlp, axis = 1)
     x_test_6.to_csv('x_test_6.csv', index=False)   
     %reset_selective x_test_6   
 
-    # submit(res)
+    #Finally!
+    x_train = pd.read_csv('./x_train.csv').fillna("")
+    x_label = df_train.is_duplicate
+    x_test_1 = pd.read_csv('./x_test_1.csv').fillna("")
+    x_test_2 = pd.read_csv('./x_test_2.csv').fillna("")
+    x_test_3 = pd.read_csv('./x_test_3.csv').fillna("")
+    x_test_4 = pd.read_csv('./x_test_4.csv').fillna("")
+    x_test_5 = pd.read_csv('./x_test_5.csv').fillna("")
+    x_test_6 = pd.read_csv('./x_test_6.csv').fillna("")
+    # x_test = pd.concat([x_test_1, x_test_2, x_test_3, x_test_4, x_test_5, x_test_6])
+
+    if oversample_label == 1:
+        x_train["is_duplicate"] = x_label
+        x_train_oversampled = oversample(x_train)
+
+        x_label_oversampled = x_train_oversampled.pop("is_duplicate")
+        res_oversampled = run_xgb(x_train_oversampled, x_test, x_label_oversampled)
+        submit(res_oversampled)
+
+    else:
+        res_1 = run_xgb(x_train, x_test_1, x_label)
+        sub = pd.DataFrame()
+        sub['test_id'] = df_test[0:390000]['test_id']
+        sub['is_duplicate'] = res_1
+        sub.to_csv('res_1.csv', index=False)   
+
+        res_2 = run_xgb(x_train, x_test_2, x_label)
+        sub = pd.DataFrame()
+        sub['test_id'] = df_test[390000:780000]['test_id']
+        sub['is_duplicate'] = res_2
+        sub.to_csv('res_2.csv', index=False)   
+
+        res_3 = run_xgb(x_train, x_test_3, x_label)
+        sub = pd.DataFrame()
+        sub['test_id'] = df_test[780000:1170000]['test_id']
+        sub['is_duplicate'] = res_3
+        sub.to_csv('res_3.csv', index=False)   
+
+        res_4 = run_xgb(x_train, x_test_4, x_label)
+        sub = pd.DataFrame()
+        sub['test_id'] = df_test[1170000:1560000]['test_id']
+        sub['is_duplicate'] = res_4
+        sub.to_csv('res_4.csv', index=False)   
+
+        res_5 = run_xgb(x_train, x_test_5, x_label)
+        sub = pd.DataFrame()
+        sub['test_id'] = df_test[1560000:1950000]['test_id']
+        sub['is_duplicate'] = res_5
+        sub.to_csv('res_5.csv', index=False)   
+
+        res_6 = run_xgb(x_train, x_test_6, x_label)
+        sub = pd.DataFrame()
+        sub['test_id'] = df_test[1950000:]['test_id']
+        sub['is_duplicate'] = res_6
+        sub.to_csv('res_6.csv', index=False)   
+
+        res_1 = pd.read_csv('./res_1.csv').fillna("")
+        res_2 = pd.read_csv('./res_2.csv').fillna("")
+        res_3 = pd.read_csv('./res_3.csv').fillna("")
+        res_4 = pd.read_csv('./res_4.csv').fillna("")
+        res_5 = pd.read_csv('./res_5.csv').fillna("")
+        res_6 = pd.read_csv('./res_6.csv').fillna("")
+        res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
+        res.to_csv("res_basic_nlp.csv", index = False)
+        # submit(res)
