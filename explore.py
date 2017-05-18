@@ -364,7 +364,7 @@ def run_xgb(x_train, x_test, x_label):
 
     watchlist = [(d_train, 'train')]
 
-    bst = xgb.train(params, d_train, 1300, watchlist, early_stopping_rounds=50, verbose_eval=50)
+    bst = xgb.train(params, d_train, 100, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
     p_test = bst.predict(d_test)
 
@@ -428,19 +428,24 @@ if __name__ == '__main__':
 
     train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
     test_qs = pd.Series(df_test['question1'].tolist() + df_test['question2'].tolist()).astype(str)
+    qs = pd.concat([train_qs, test_qs])
 
     # tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
     # tfidf.fit_transform(train_qs[0:2500])
 
-    words = (" ".join(train_qs)).lower().split()
+    words = (" ".join(qs)).lower().split()
     counts = Counter(words)
     weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
-
+    with open('word_weights.pickle', 'wb') as handle:
+        pickle.dump(weights, handle)
+    with open('word_weights.pickle', 'rb') as handle:
+        weights = pickle.load(handle)
+ 
     stops = set(stopwords.words("english"))
 
     hash_table = {}
     df_train.apply(generate_hash_freq, axis = 1)
-    # df_test.apply(generate_hash_freq, axis = 1)
+    df_test.apply(generate_hash_freq, axis = 1)
     with open('hash_table.pickle', 'wb') as handle:
         pickle.dump(hash_table, handle)
 
@@ -501,56 +506,55 @@ if __name__ == '__main__':
     # x_test = pd.concat([x_test_1, x_test_2, x_test_3, x_test_4, x_test_5, x_test_6])
 
     if oversample_label == 1:
-        x_train["is_duplicate"] = x_label
-        x_train_oversampled = oversample(x_train)
+        x_train["is_duplicate"] = df_train.is_duplicate
+        x_train = oversample(x_train)
 
-        x_label_oversampled = x_train_oversampled.pop("is_duplicate")
-        res_oversampled = run_xgb(x_train_oversampled, x_test, x_label_oversampled)
-        submit(res_oversampled)
+        x_label = x_train.pop("is_duplicate")
+        # res_oversampled = run_xgb(x_train_oversampled, x_test, x_label_oversampled)
+        # submit(res_oversampled)
 
-    else:
-        res_1 = run_xgb(x_train, x_test_1, x_label)
-        sub = pd.DataFrame()
-        sub['test_id'] = df_test[0:390000]['test_id']
-        sub['is_duplicate'] = res_1
-        sub.to_csv('res_1.csv', index=False)   
+    res_1 = run_xgb(x_train, x_test_1, x_label)
+    sub = pd.DataFrame()
+    sub['test_id'] = df_test[0:390000]['test_id']
+    sub['is_duplicate'] = res_1
+    sub.to_csv('res_1.csv', index=False)   
 
-        res_2 = run_xgb(x_train, x_test_2, x_label)
-        sub = pd.DataFrame()
-        sub['test_id'] = df_test[390000:780000]['test_id']
-        sub['is_duplicate'] = res_2
-        sub.to_csv('res_2.csv', index=False)   
+    res_2 = run_xgb(x_train, x_test_2, x_label)
+    sub = pd.DataFrame()
+    sub['test_id'] = df_test[390000:780000]['test_id']
+    sub['is_duplicate'] = res_2
+    sub.to_csv('res_2.csv', index=False)   
 
-        res_3 = run_xgb(x_train, x_test_3, x_label)
-        sub = pd.DataFrame()
-        sub['test_id'] = df_test[780000:1170000]['test_id']
-        sub['is_duplicate'] = res_3
-        sub.to_csv('res_3.csv', index=False)   
+    res_3 = run_xgb(x_train, x_test_3, x_label)
+    sub = pd.DataFrame()
+    sub['test_id'] = df_test[780000:1170000]['test_id']
+    sub['is_duplicate'] = res_3
+    sub.to_csv('res_3.csv', index=False)   
 
-        res_4 = run_xgb(x_train, x_test_4, x_label)
-        sub = pd.DataFrame()
-        sub['test_id'] = df_test[1170000:1560000]['test_id']
-        sub['is_duplicate'] = res_4
-        sub.to_csv('res_4.csv', index=False)   
+    res_4 = run_xgb(x_train, x_test_4, x_label)
+    sub = pd.DataFrame()
+    sub['test_id'] = df_test[1170000:1560000]['test_id']
+    sub['is_duplicate'] = res_4
+    sub.to_csv('res_4.csv', index=False)   
 
-        res_5 = run_xgb(x_train, x_test_5, x_label)
-        sub = pd.DataFrame()
-        sub['test_id'] = df_test[1560000:1950000]['test_id']
-        sub['is_duplicate'] = res_5
-        sub.to_csv('res_5.csv', index=False)   
+    res_5 = run_xgb(x_train, x_test_5, x_label)
+    sub = pd.DataFrame()
+    sub['test_id'] = df_test[1560000:1950000]['test_id']
+    sub['is_duplicate'] = res_5
+    sub.to_csv('res_5.csv', index=False)   
 
-        res_6 = run_xgb(x_train, x_test_6, x_label)
-        sub = pd.DataFrame()
-        sub['test_id'] = df_test[1950000:]['test_id']
-        sub['is_duplicate'] = res_6
-        sub.to_csv('res_6.csv', index=False)   
+    res_6 = run_xgb(x_train, x_test_6, x_label)
+    sub = pd.DataFrame()
+    sub['test_id'] = df_test[1950000:]['test_id']
+    sub['is_duplicate'] = res_6
+    sub.to_csv('res_6.csv', index=False)   
 
-        res_1 = pd.read_csv('./res_1.csv').fillna("")
-        res_2 = pd.read_csv('./res_2.csv').fillna("")
-        res_3 = pd.read_csv('./res_3.csv').fillna("")
-        res_4 = pd.read_csv('./res_4.csv').fillna("")
-        res_5 = pd.read_csv('./res_5.csv').fillna("")
-        res_6 = pd.read_csv('./res_6.csv').fillna("")
-        res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
-        res.to_csv("res_basic_nlp.csv", index = False)
-        # submit(res)
+    res_1 = pd.read_csv('./res_1.csv').fillna("")
+    res_2 = pd.read_csv('./res_2.csv').fillna("")
+    res_3 = pd.read_csv('./res_3.csv').fillna("")
+    res_4 = pd.read_csv('./res_4.csv').fillna("")
+    res_5 = pd.read_csv('./res_5.csv').fillna("")
+    res_6 = pd.read_csv('./res_6.csv').fillna("")
+    res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
+    res.to_csv("res_basic_nlp_oversampled.csv", index = False)
+    # submit(res)
