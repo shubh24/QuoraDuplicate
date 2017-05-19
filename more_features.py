@@ -26,7 +26,7 @@ from tqdm import tqdm, tqdm_pandas
 tqdm.pandas()
 from explore import *
 
-def run_xgb(x_train, x_valid, y_train, y_valid):
+def run_xgb_val(x_train, x_valid, y_train, y_valid):
 
     # x_train = pd.concat([pos_train, neg_train]) #Concat positive and negative
     # y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist() #Putting in 1 and 0
@@ -46,7 +46,7 @@ def run_xgb(x_train, x_valid, y_train, y_valid):
 
     watchlist = [(d_train, 'train'), (d_valid, 'valid')]
 
-    bst = xgb.train(params, d_train, 1000, watchlist, early_stopping_rounds=50, verbose_eval=50)
+    bst = xgb.train(params, d_train, 400, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
     # d_test = xgb.DMatrix(x_test_feat)
     # p_test = bst.predict(d_test)
@@ -278,37 +278,6 @@ def get_cluster_sim(row):
     else:
        return common_ne/(len(q1_combined_ne) + len(q2_combined_ne) - common_ne)
 
-def generate_ne_freq(to_be_clustered):
-
-    hash_table = {}
-
-    for index, row in to_be_clustered.iterrows():
-        print index
-
-        q1 = nlp(unicode(str(row["question1"]), "utf-8"))
-        q2 = nlp(unicode(str(row["question2"]), "utf-8"))
-
-        q1_ne = q1.ents
-        q2_ne = q2.ents
-
-        q1_ne = "-".join(set([str(i).lower() for i in q1_ne]))
-        q2_ne = "-".join(set([str(i).lower() for i in q2_ne]))
-        
-        hash_key1 = hash(q1_ne)
-        hash_key2 = hash(q2_ne)
-
-        if hash_key1 not in hash_table:
-            hash_table[hash_key1] = 1
-        else:
-            hash_table[hash_key1] += 1
-
-        if hash_key2 not in hash_table:
-            hash_table[hash_key2] = 1
-        else:
-            hash_table[hash_key2] += 1
-
-    return hash_table
-
 def q1_ne_hash_freq(row):
 
     q1 = nlp(unicode(str(row["question1"]), "utf-8"))
@@ -341,6 +310,33 @@ def q2_ne_hash_freq(row):
     else:
         return hash_table[hash_key2]
 
+def test_to_qid(row):
+
+    #cant take absolute qids, not seen in train. 
+    #Difference magnitude means anything?
+    #Proximity of qid, or frequency or something
+    instances_in_train_q1 = df_train[df_train["question1"] == row["question1"]]
+    instances_in_train_q2 = df_train[df_train["question2"] == row["question1"]]
+
+    if len(instances_in_train_q1) > 0:
+        qid1 = instances_in_train_q1.iloc[0].qid1
+    elif len(instances_in_train_q2) > 0:
+        qid1 = instances_in_train_q2.iloc[0].qid2
+    else:
+        qid1 = 537934 + int(row["test_id"])
+
+    instances_in_train_q1 = df_train[df_train["question1"] == row["question2"]]
+    instances_in_train_q2 = df_train[df_train["question2"] == row["question2"]]
+
+    if len(instances_in_train_q1) > 0:
+        qid2 = instances_in_train_q1.iloc[0].qid1
+    elif len(instances_in_train_q2) > 0:
+        qid2 = instances_in_train_q2.iloc[0].qid2
+    else:
+        qid2 = 537934 + int(row["test_id"]) + 1
+
+    return pd.Series({"qid1": qid1, "qid2": qid2})
+
 if __name__ == '__main__':
 
     x_train_feat = pd.read_csv('./x_train_feat.csv').fillna("")
@@ -367,11 +363,6 @@ if __name__ == '__main__':
 
     # x_train_feat.apply(generate_hash_freq, axis = 1)
 
-    ##DO THIS AND SAVE AS PICKLE
-    hash_table_ne = generate_ne_freq(x_train_feat)
-    with open('hash_table_ne.pickle', 'wb') as handle:
-        pickle.dump(hash_table_ne, handle)
-
 
     x_train_feat = get_features(x_train_feat)
     x_train_feat.to_csv("x_train_feat.csv", index = False)
@@ -381,4 +372,4 @@ if __name__ == '__main__':
 
     x_train, x_valid, y_train, y_valid = train_test_split(x_train_feat, x_label, test_size=0.2, random_state=4242, stratify = x_label)
 
-    p = run_xgb(x_train, x_valid, y_train, y_valid)
+    p = run_xgb_val(x_train, x_valid, y_train, y_valid)
