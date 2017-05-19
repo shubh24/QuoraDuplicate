@@ -195,28 +195,25 @@ def basic_nlp(row):
     except:
         q2_quotes = 0
 
-    # with open('hash_table_ne.pickle', 'rb') as handle:
-    #     hash_table_ne = pickle.load(handle)
+    # if len(q1_ne) == 0:
+    #     q1_ne_hash_freq = 1
+    # else:
+    #     hash_key1 = hash("-".join(set([str(i).lower() for i in q1_ne])))
 
-    if len(q1_ne) == 0:
-        q1_ne_hash_freq = 1
-    else:
-        hash_key1 = hash("-".join(set([str(i).lower() for i in q1_ne])))
+    #     if hash_key1 not in hash_table_ne:
+    #         q1_ne_hash_freq = 1
+    #     else:
+    #         q1_ne_hash_freq = hash_table_ne[hash_key1]
 
-        if hash_key1 not in hash_table_ne:
-            q1_ne_hash_freq = 1
-        else:
-            q1_ne_hash_freq = hash_table_ne[hash_key1]
+    # if len(q2_ne) == 0:
+    #     q2_ne_hash_freq = 1
+    # else:
+    #     hash_key2 = hash("-".join(set([str(i).lower() for i in q2_ne])))
 
-    if len(q2_ne) == 0:
-        q2_ne_hash_freq = 1
-    else:
-        hash_key2 = hash("-".join(set([str(i).lower() for i in q2_ne])))
-
-        if hash_key2 not in hash_table_ne:
-            q2_ne_hash_freq = 1
-        else:
-            q2_ne_hash_freq = hash_table_ne[hash_key2]
+    #     if hash_key2 not in hash_table_ne:
+    #         q2_ne_hash_freq = 1
+    #     else:
+    #         q2_ne_hash_freq = hash_table_ne[hash_key2]
 
     try:
         q1_sents = len(nltk.tokenize.sent_tokenize(row.question1))
@@ -244,6 +241,16 @@ def basic_nlp(row):
         q2_hash_freq = hash_table[hash_key2]
     else:
         q2_hash_freq = 1
+
+    # if hash_key1 in pos_hash_table:
+    #     q1_dup_ratio = pos_hash_table[hash_key1]/q1_hash_freq
+    # else:
+    #     q1_dup_ratio = 0
+
+    # if hash_key2 in pos_hash_table:
+    #     q2_dup_ratio = pos_hash_table[hash_key2]/q2_hash_freq
+    # else:
+    #     q2_dup_ratio = 0
 
     spacy_sim = q1.similarity(q2)
 
@@ -289,9 +296,9 @@ def basic_nlp(row):
         "q1_quotes": q1_quotes,
         "q2_quotes": q2_quotes,
         "quotes_diff": abs(q1_quotes - q2_quotes),
-        "q1_ne_hash_freq": q1_ne_hash_freq,
-        "q2_ne_hash_freq": q2_ne_hash_freq,
-        "chunk_hash_diff": abs(q1_ne_hash_freq - q2_ne_hash_freq),
+        # "q1_ne_hash_freq": q1_ne_hash_freq,
+        # "q2_ne_hash_freq": q2_ne_hash_freq,
+        # "chunk_hash_diff": abs(q1_ne_hash_freq - q2_ne_hash_freq),
         "q1_hash_freq": q1_hash_freq,
         "q2_hash_freq": q2_hash_freq,
         "q_freq_avg": (q1_hash_freq + q2_hash_freq)/2,
@@ -300,6 +307,9 @@ def basic_nlp(row):
         "q1_pronouns_count": q1_pronouns_count,
         "q2_pronouns_count": q2_pronouns_count,
         "pronouns_diff": pronouns_diff
+        # "q1_dup_ratio": q1_dup_ratio,
+        # "q2_dup_ratio": q2_dup_ratio,
+        # "q1_q2_dup_ratio_avg": (q1_dup_ratio + q2_dup_ratio)/2
     }) 
 
 def get_word_bigrams(words):
@@ -326,6 +336,54 @@ def generate_hash_freq(row):
         hash_table[hash_key2] = 1
     else:
         hash_table[hash_key2] += 1
+
+def generate_duplicate_freq(row):
+
+    hash_key1 = hash(row["question1"].lower())
+    hash_key2 = hash(row["question2"].lower())
+
+    if hash_key1 not in pos_hash_table and row["is_duplicate"] == 1:
+        pos_hash_table[hash_key1] = 1
+    elif hash_key1 not in pos_hash_table and row["is_duplicate"] == 0:
+        pos_hash_table[hash_key1] = 0
+    elif hash_key1 in pos_hash_table and row["is_duplicate"] == 1:
+        pos_hash_table[hash_key1] += 1
+    # elif hash_key1 in pos_hash_table and row["is_duplicate"] == 0:
+    #     pass
+
+    if hash_key2 not in pos_hash_table and row["is_duplicate"] == 1:
+        pos_hash_table[hash_key2] = 1
+    elif hash_key2 not in pos_hash_table and row["is_duplicate"] == 0:
+        pos_hash_table[hash_key2] = 0
+    elif hash_key2 in pos_hash_table and row["is_duplicate"] == 1:
+        pos_hash_table[hash_key2] += 1
+    # elif hash_key1 in pos_hash_table and row["is_duplicate"] == 0:
+    #     pass
+
+
+def generate_ne_freq(row):
+
+    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+    q1_ne = q1.ents
+    q2_ne = q2.ents
+
+    q1_ne = "-".join(set([str(i).lower() for i in q1_ne]))
+    q2_ne = "-".join(set([str(i).lower() for i in q2_ne]))
+    
+    hash_key1 = hash(q1_ne)
+    hash_key2 = hash(q2_ne)
+
+    if hash_key1 not in hash_table_ne:
+        hash_table_ne[hash_key1] = 1
+    else:
+        hash_table_ne[hash_key1] += 1
+
+    if hash_key2 not in hash_table_ne:
+        hash_table_ne[hash_key2] = 1
+    else:
+        hash_table_ne[hash_key2] += 1
 
 def oversample(x_train):
 
@@ -364,12 +422,12 @@ def run_xgb(x_train, x_test, x_label):
 
     watchlist = [(d_train, 'train')]
 
-    bst = xgb.train(params, d_train, 100, watchlist, early_stopping_rounds=50, verbose_eval=50)
+    bst = xgb.train(params, d_train, 1500, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
     p_test = bst.predict(d_test)
 
-    xgb.plot_importance(bst)
-    pyplot.show()
+    # xgb.plot_importance(bst)
+    # pyplot.show()
 
     return p_test
 
@@ -452,6 +510,19 @@ if __name__ == '__main__':
     with open('hash_table.pickle', 'rb') as handle:
         hash_table = pickle.load(handle)
 
+    # pos_hash_table = {}
+    # df_train.apply(generate_duplicate_freq, axis = 1)
+    # with open('pos_hash_table.pickle', 'wb') as handle:
+    #     pickle.dump(pos_hash_table, handle)
+
+    # with open('pos_hash_table.pickle', 'rb') as handle:
+    #     pos_hash_table = pickle.load(handle)
+
+    hash_table_ne = {}
+    df_train.apply(generate_ne_freq, axis = 1)
+    df_test.apply(generate_ne_freq, axis = 1)
+    with open('hash_table_ne.pickle', 'wb') as handle:
+        pickle.dump(hash_table_ne, handle)
     with open('hash_table_ne.pickle', 'rb') as handle:
         hash_table_ne = pickle.load(handle)
 
@@ -467,42 +538,36 @@ if __name__ == '__main__':
 
     #Real Testing
     x_train = df_train.apply(basic_nlp, axis = 1)
-    x_train.to_csv('x_train.csv', index=False)
+    x_train.to_csv('./new/x_train.csv', index=False)
     %reset_selective x_train 
 
     x_test_1 = df_test[0:390000].apply(basic_nlp, axis = 1)
-    x_test_1.to_csv('x_test_1.csv', index=False)   
+    x_test_1.to_csv('./new/x_test_1.csv', index=False)   
     %reset_selective x_test_1   
 
     x_test_2 = df_test[390000:780000].apply(basic_nlp, axis = 1)
-    x_test_2.to_csv('x_test_2.csv', index=False)
+    x_test_2.to_csv('./new/x_test_2.csv', index=False)
     %reset_selective x_test_2   
 
     x_test_3 = df_test[780000:1170000].apply(basic_nlp, axis = 1)
-    x_test_3.to_csv('x_test_3.csv', index=False)   
+    x_test_3.to_csv('./new/x_test_3.csv', index=False)   
     %reset_selective x_test_3   
 
     x_test_4 = df_test[1170000:1560000].apply(basic_nlp, axis = 1)
-    x_test_4.to_csv('x_test_4.csv', index=False)   
+    x_test_4.to_csv('./new/x_test_4.csv', index=False)   
     %reset_selective x_test_4   
 
     x_test_5 = df_test[1560000:1950000].apply(basic_nlp, axis = 1)
-    x_test_5.to_csv('x_test_5.csv', index=False)   
+    x_test_5.to_csv('./new/x_test_5.csv', index=False)   
     %reset_selective x_test_5   
 
     x_test_6 = df_test[1950000:].apply(basic_nlp, axis = 1)
-    x_test_6.to_csv('x_test_6.csv', index=False)   
+    x_test_6.to_csv('./new/x_test_6.csv', index=False)   
     %reset_selective x_test_6   
 
     #Finally!
     x_train = pd.read_csv('./x_train.csv').fillna("")
     x_label = df_train.is_duplicate
-    x_test_1 = pd.read_csv('./x_test_1.csv').fillna("")
-    x_test_2 = pd.read_csv('./x_test_2.csv').fillna("")
-    x_test_3 = pd.read_csv('./x_test_3.csv').fillna("")
-    x_test_4 = pd.read_csv('./x_test_4.csv').fillna("")
-    x_test_5 = pd.read_csv('./x_test_5.csv').fillna("")
-    x_test_6 = pd.read_csv('./x_test_6.csv').fillna("")
     # x_test = pd.concat([x_test_1, x_test_2, x_test_3, x_test_4, x_test_5, x_test_6])
 
     if oversample_label == 1:
@@ -513,41 +578,53 @@ if __name__ == '__main__':
         # res_oversampled = run_xgb(x_train_oversampled, x_test, x_label_oversampled)
         # submit(res_oversampled)
 
+    x_test_1 = pd.read_csv('./x_test_1.csv').fillna("")
     res_1 = run_xgb(x_train, x_test_1, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[0:390000]['test_id']
     sub['is_duplicate'] = res_1
     sub.to_csv('res_1.csv', index=False)   
+    %reset_selective -f x_test_1   
 
+    x_test_2 = pd.read_csv('./x_test_2.csv').fillna("")
     res_2 = run_xgb(x_train, x_test_2, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[390000:780000]['test_id']
     sub['is_duplicate'] = res_2
     sub.to_csv('res_2.csv', index=False)   
+    %reset_selective -f x_test_2   
 
+    x_test_3 = pd.read_csv('./x_test_3.csv').fillna("")
     res_3 = run_xgb(x_train, x_test_3, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[780000:1170000]['test_id']
     sub['is_duplicate'] = res_3
     sub.to_csv('res_3.csv', index=False)   
+    %reset_selective -f x_test_3   
 
+    x_test_4 = pd.read_csv('./x_test_4.csv').fillna("")
     res_4 = run_xgb(x_train, x_test_4, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[1170000:1560000]['test_id']
     sub['is_duplicate'] = res_4
     sub.to_csv('res_4.csv', index=False)   
+    %reset_selective -f x_test_4   
 
+    x_test_5 = pd.read_csv('./x_test_5.csv').fillna("")
     res_5 = run_xgb(x_train, x_test_5, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[1560000:1950000]['test_id']
     sub['is_duplicate'] = res_5
     sub.to_csv('res_5.csv', index=False)   
+    %reset_selective -f x_test_5   
 
+    x_test_6 = pd.read_csv('./x_test_6.csv').fillna("")
     res_6 = run_xgb(x_train, x_test_6, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[1950000:]['test_id']
     sub['is_duplicate'] = res_6
     sub.to_csv('res_6.csv', index=False)   
+    %reset_selective -f x_test_6   
 
     res_1 = pd.read_csv('./res_1.csv').fillna("")
     res_2 = pd.read_csv('./res_2.csv').fillna("")
@@ -556,5 +633,5 @@ if __name__ == '__main__':
     res_5 = pd.read_csv('./res_5.csv').fillna("")
     res_6 = pd.read_csv('./res_6.csv').fillna("")
     res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
-    res.to_csv("res_basic_nlp_oversampled.csv", index = False)
+    res.to_csv("res_basic_nlp_testhash_1500.csv", index = False)
     # submit(res)
