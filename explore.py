@@ -369,6 +369,22 @@ def generate_duplicate_freq(row):
     # elif hash_key1 in pos_hash_table and row["is_duplicate"] == 0:
     #     pass
 
+def generate_positive_graph(row):
+
+    hash_key1 = row["question1"]
+    hash_key2 = row["question2"]
+        
+    if row["is_duplicate"] == 1:
+        if hash_key1 not in pos_graph:
+            pos_graph[hash_key1] = [hash_key2]
+        elif hash_key1 in pos_graph:
+            pos_graph[hash_key1].append(hash_key2)
+
+        if hash_key2 not in pos_graph:
+            pos_graph[hash_key2] = [hash_key1]
+        elif hash_key2 in pos_graph:
+            pos_graph[hash_key2].append(hash_key1)
+
 def generate_graph_table(row):
 
     hash_key1 = row["question1"]
@@ -442,6 +458,74 @@ def oversample(x_train):
     neg_train = pd.concat([neg_train, neg_train[:int(scale * len(neg_train))]])
 
     return pd.concat([pos_train, neg_train])
+
+def bfs(q_node, q_search, separation):
+
+    if separation > 5:
+        return -1
+
+    if len(graph[q_node]) > 0:
+        
+        shortest_res = 32768
+
+        if q_search in graph[q_node]:
+            return separation
+        else:
+
+            for i,j in enumerate(graph[q_node]):
+
+                if i > 5:
+                    return shortest_res
+                    
+                bfs_res = bfs(j, q_search, separation + 1)
+
+                if bfs_res != -1 and bfs_res < shortest_res:
+                    shortest_res = bfs_res
+
+            return shortest_res
+
+    else:
+        return -1
+
+def initialize_bfs(row):
+
+    q1 = row["question1"]
+    q2 = row["question2"]
+
+    shortest_res = 32768
+
+    for i in graph[q1]:
+        if i != q2:
+            res = bfs(i, q2, 1)
+
+            if res != -1 and res < shortest_res:
+                shortest_res = res
+
+    if shortest_res == 32768:
+        return -1
+    else:
+        return shortest_res
+
+def augment_test(row):
+    global new_df_test
+
+    #map q1 with dups of q2
+    if row["question2"] in pos_graph:
+        new_rows = pd.DataFrame()
+        q2_dups = pos_graph[row["question2"]]
+        new_rows["question2"] = [i for i in q2_dups]
+        new_rows["question1"] = row["question1"]    
+        new_rows["test_id"] = row["test_id"]
+        new_df_test = pd.concat([new_df_test, new_rows])
+
+    #map q2 with dups of q1
+    if row["question1"] in pos_graph:
+        new_rows = pd.DataFrame()
+        q1_dups = pos_graph[row["question1"]]
+        new_rows["question1"] = [i for i in q1_dups]
+        new_rows["question2"] = row["question2"]    
+        new_rows["test_id"] = row["test_id"]
+        new_df_test = pd.concat([new_df_test, new_rows])
 
 # def run_xgb(x_train, x_valid, y_train, y_valid):
 def run_xgb(x_train, x_test, x_label):
@@ -576,6 +660,16 @@ if __name__ == '__main__':
     with open('graph.pickle', 'rb') as handle:
         graph = pickle.load(handle)
 
+    pos_graph = {}
+    df_train.apply(generate_positive_graph, axis = 1)
+    with open('pos_graph.pickle', 'wb') as handle:
+        pickle.dump(pos_graph, handle)
+    with open('pos_graph.pickle', 'rb') as handle:
+        pos_graph = pickle.load(handle)
+
+    new_df_test = df_test
+    df_test.apply(augment_test, axis = 1)
+
     #Validation
     x_train, x_test, y_train, y_valid = validate(df_train)
     x_train_feat = x_train.apply(basic_nlp, axis = 1)
@@ -589,6 +683,7 @@ if __name__ == '__main__':
     #Real Testing
     x_train = df_train.apply(basic_nlp, axis = 1)
     x_train["neighbor_intersection"] = df_train.apply(neighbor_intersection, axis = 1)
+    x_train["separation"] = df_train.apply(initialize_bfs, axis = 1)
     x_train.to_csv('./new/x_train.csv', index=False)
     %reset_selective x_train 
 
