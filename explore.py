@@ -310,7 +310,16 @@ def basic_nlp(row):
         # "q1_dup_ratio": q1_dup_ratio,
         # "q2_dup_ratio": q2_dup_ratio,
         # "q1_q2_dup_ratio_avg": (q1_dup_ratio + q2_dup_ratio)/2
-    }) 
+    })
+
+def neighbor_intersection(row):
+
+    q1_neighbors = graph[row["question1"]]
+    q2_neighbors = graph[row["question2"]]
+
+    common_neighbors = set(q1_neighbors).intersection(q2_neighbors)
+
+    return len(common_neighbors)/(len(q1_neighbors) + len(q2_neighbors) - len(common_neighbors))
 
 def get_word_bigrams(words):
 
@@ -360,6 +369,39 @@ def generate_duplicate_freq(row):
     # elif hash_key1 in pos_hash_table and row["is_duplicate"] == 0:
     #     pass
 
+def generate_graph_table(row):
+
+    hash_key1 = row["question1"]
+    hash_key2 = row["question2"]
+        
+    if hash_key1 not in graph:
+        graph[hash_key1] = [hash_key2]
+    elif hash_key1 in graph:
+        graph[hash_key1].append(hash_key2)
+
+    if hash_key2 not in graph:
+        graph[hash_key2] = [hash_key1]
+    elif hash_key2 in graph:
+        graph[hash_key2].append(hash_key1)
+
+def augment_rows():
+
+    new_graph = graph
+
+    for q1 in graph:
+
+        q2_list = graph[q1]
+        
+        for i in q2_list:
+            for j in q2_list:
+                if i != j:                    
+                    if j not in graph[i]:
+                        print "hi"
+                        new_graph[i].append(j)
+
+    # new_df_train = df_train[["question1", "question2", "is_duplicate"]]
+
+    # for i in new_graph:
 
 def generate_ne_freq(row):
 
@@ -526,6 +568,14 @@ if __name__ == '__main__':
     with open('hash_table_ne.pickle', 'rb') as handle:
         hash_table_ne = pickle.load(handle)
 
+    graph = {}
+    df_train.apply(generate_graph_table, axis = 1)
+    df_test.apply(generate_graph_table, axis = 1)
+    with open('graph.pickle', 'wb') as handle:
+        pickle.dump(graph, handle)
+    with open('graph.pickle', 'rb') as handle:
+        graph = pickle.load(handle)
+
     #Validation
     x_train, x_test, y_train, y_valid = validate(df_train)
     x_train_feat = x_train.apply(basic_nlp, axis = 1)
@@ -538,30 +588,37 @@ if __name__ == '__main__':
 
     #Real Testing
     x_train = df_train.apply(basic_nlp, axis = 1)
+    x_train["neighbor_intersection"] = df_train.apply(neighbor_intersection, axis = 1)
     x_train.to_csv('./new/x_train.csv', index=False)
     %reset_selective x_train 
 
     x_test_1 = df_test[0:390000].apply(basic_nlp, axis = 1)
+    x_test_1["neighbor_intersection"] = df_test[0:390000].apply(neighbor_intersection, axis = 1)
     x_test_1.to_csv('./new/x_test_1.csv', index=False)   
     %reset_selective x_test_1   
 
     x_test_2 = df_test[390000:780000].apply(basic_nlp, axis = 1)
+    x_test_2["neighbor_intersection"] = df_test[390000:780000].apply(neighbor_intersection, axis = 1)
     x_test_2.to_csv('./new/x_test_2.csv', index=False)
     %reset_selective x_test_2   
 
     x_test_3 = df_test[780000:1170000].apply(basic_nlp, axis = 1)
+    x_test_3["neighbor_intersection"] = df_test[780000:1170000].apply(neighbor_intersection, axis = 1)
     x_test_3.to_csv('./new/x_test_3.csv', index=False)   
     %reset_selective x_test_3   
 
     x_test_4 = df_test[1170000:1560000].apply(basic_nlp, axis = 1)
+    x_test_4["neighbor_intersection"] = df_test[1170000:1560000].apply(neighbor_intersection, axis = 1)
     x_test_4.to_csv('./new/x_test_4.csv', index=False)   
     %reset_selective x_test_4   
 
     x_test_5 = df_test[1560000:1950000].apply(basic_nlp, axis = 1)
+    x_test_5["neighbor_intersection"] = df_test[1560000:1950000].apply(neighbor_intersection, axis = 1)
     x_test_5.to_csv('./new/x_test_5.csv', index=False)   
     %reset_selective x_test_5   
 
     x_test_6 = df_test[1950000:].apply(basic_nlp, axis = 1)
+    x_test_6["neighbor_intersection"] = df_test[1950000:].apply(neighbor_intersection, axis = 1)
     x_test_6.to_csv('./new/x_test_6.csv', index=False)   
     %reset_selective x_test_6   
 
