@@ -61,6 +61,48 @@ def tuple_similarity(q1_words, q2_words):
 
     return common_words/all_words
 
+def get_ne_score(row):
+
+    q1_words = str(row.question1).lower().split()
+    q2_words = str(row.question2).lower().split()
+
+    all_words_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words])
+
+    q1 = nlp(unicode(str(row["question1"]), "utf-8"))
+    q2 = nlp(unicode(str(row["question2"]), "utf-8"))
+
+    q1_ne = q1.ents
+    q2_ne = q2.ents
+
+    q1_ne = set([str(i) for i in q1_ne])
+    q2_ne = set([str(i) for i in q2_ne])
+
+    if len(q1_ne) == 0:
+        q1_ne_ratio = 0
+    else:
+        q1_ne_ratio = np.sum([weights.get(w, 0) for w in q1_ne])/np.sum([weights.get(w, 0) for w in q1_words])
+
+    if len(q2_ne) == 0:
+        q2_ne_ratio = 0
+    else:
+        q2_ne_ratio = np.sum([weights.get(w, 0) for w in q2_ne])/np.sum([weights.get(w, 0) for w in q2_words])
+
+    common_ne = list(q1_ne.intersection(q2_ne))
+    common_ne_weights = np.sum([weights.get(w, 0) for w in common_ne])
+
+    if len(q1_ne) + len(q2_ne) == 0:
+        common_ne_score = 0
+    else:
+       common_ne_score = common_ne_weights/(all_words_score - common_ne_weights)
+
+    return pd.Series({
+        "q1_ne_ratio": q1_ne_ratio,
+        "q2_ne_ratio": q2_ne_ratio,
+        "ne_diff": abs(q1_ne_ratio - q2_ne_ratio),
+        "ne_score": common_ne_score
+    })
+
+
 def basic_nlp(row):
 
     # q1_tf = get_tf(q1_words)
@@ -119,19 +161,20 @@ def basic_nlp(row):
     if len(q1_ne) == 0:
         q1_ne_ratio = 0
     else:
-        q1_ne_ratio = len(q1_ne)/len(row["question1"].split())
+        q1_ne_ratio = np.sum([weights.get(w, 0) for w in q1_ne])/np.sum([weights.get(w, 0) for w in q1_words])
 
     if len(q2_ne) == 0:
         q2_ne_ratio = 0
     else:
-        q2_ne_ratio = len(q2_ne)/len(row["question2"].split())
+        q2_ne_ratio = np.sum([weights.get(w, 0) for w in q2_ne])/np.sum([weights.get(w, 0) for w in q2_words])
 
-    common_ne = len(q1_ne.intersection(q2_ne))
+    common_ne = list(q1_ne.intersection(q2_ne))
+    common_ne_weights = np.sum([weights.get(w, 0) for w in common_ne])
 
     if len(q1_ne) + len(q2_ne) == 0:
         common_ne_score = 0
     else:
-       common_ne_score = common_ne/(len(q1_ne) + len(q2_ne) - common_ne)
+       common_ne_score = common_ne_weights/(all_words_score - common_ne_weights)
 
     pos_hash = {}
     common_pos = []
@@ -321,7 +364,7 @@ def neighbor_intersection(row):
 
     return len(common_neighbors)/(len(q1_neighbors) + len(q2_neighbors) - len(common_neighbors))
 
-def q1_second_degree_freq(row):
+def get_q1_second_degree_freq(row):
 
     q1_neighbors = graph[row["question1"]]
 
@@ -331,7 +374,7 @@ def q1_second_degree_freq(row):
 
     return len(q1_second_degree_neighbors)
 
-def q2_second_degree_freq(row):
+def get_q2_second_degree_freq(row):
 
     q2_neighbors = graph[row["question2"]]
 
@@ -510,7 +553,7 @@ def oversample(x_train):
     return pd.concat([pos_train, neg_train])
 
 #When plotted a histogram of degrees, only -1,1 and 2 are observed. Which means either you're max 2 degree separated or you're separate(with 5 as a cutoff). 
-#Will try having 0.5*(number of second degree connections) and its intersection as a feature
+#Add (number of second degree connections) and its intersection as a feature
 def bfs(q_node, q_search, separation):
 
     if separation > 5:
@@ -657,12 +700,21 @@ def validate(training):
 
     return(x_train, x_valid, y_train, y_valid)
 
-def real_testing(dataframe, filename):
+def real_testing(dataframe, existing_df, filename):
 
-    dataframe_modified = dataframe.apply(basic_nlp, axis = 1)
+    # dataframe_modified = dataframe.progress_apply(basic_nlp, axis = 1)
+    dataframe_modified = pd.read_csv(existing_df).fillna("")
+
+    ne_dataframe = dataframe.progress_apply(get_ne_score, axis = 1)
+    dataframe_modified["q1_ne_ratio"] = ne_dataframe.q1_ne_ratio
+    dataframe_modified["q2_ne_ratio"] = ne_dataframe.q2_ne_ratio
+    dataframe_modified["ne_diff"] = ne_dataframe.ne_diff
+    dataframe_modified["ne_score"] = ne_dataframe.ne_score
+    print "hehe"
     dataframe_modified["neighbor_intersection"] = dataframe.apply(neighbor_intersection, axis = 1)
-    q1_second_degree_freq = dataframe.apply(q1_second_degree_freq, axis = 1)
-    q2_second_degree_freq = dataframe.apply(q2_second_degree_freq, axis = 1)
+
+    q1_second_degree_freq = dataframe.apply(get_q1_second_degree_freq, axis = 1)
+    q2_second_degree_freq = dataframe.apply(get_q2_second_degree_freq, axis = 1)
     dataframe_modified["second_degree_avg"] = (q1_second_degree_freq + q2_second_degree_freq)/2
     dataframe_modified["second_degree_diff"] = abs(q1_second_degree_freq - q2_second_degree_freq)
     dataframe_modified["second_degree_intersection"] = dataframe.apply(second_degree_intersection, axis = 1)
@@ -703,14 +755,13 @@ if __name__ == '__main__':
     with open('word_weights.pickle', 'rb') as handle:
         weights = pickle.load(handle)
  
-    stops = set(stopwords.words("english"))
+    stops = set(stopwords.words("english")) 
 
     hash_table = {}
     df_train.apply(generate_hash_freq, axis = 1)
     df_test.apply(generate_hash_freq, axis = 1)
     with open('hash_table.pickle', 'wb') as handle:
         pickle.dump(hash_table, handle)
-
     with open('hash_table.pickle', 'rb') as handle:
         hash_table = pickle.load(handle)
 
@@ -759,13 +810,13 @@ if __name__ == '__main__':
     #Compare res & y_valid
 
     #Real Testing
-    real_testing(df_train, './new/x_train.csv')
-    real_testing(df_test[0:390000], './new/x_test_1.csv')
-    real_testing(df_test[390000:780000], './new/x_test_2.csv')
-    real_testing(df_test[780000:1170000], './new/x_test_3.csv')
-    real_testing(df_test[1170000:1560000], './new/x_test_4.csv')
-    real_testing(df_test[1560000:1950000], './new/x_test_5.csv')
-    real_testing(df_test[1950000:], './new/x_test_6.csv')
+    real_testing(df_train, 'x_train.csv', './new/x_train.csv')
+    real_testing(df_test[0:390000], 'x_test_1.csv', './new/x_test_1.csv')
+    real_testing(df_test[390000:780000], 'x_test_2.csv', './new/x_test_2.csv')
+    real_testing(df_test[780000:1170000], 'x_test_3.csv', './new/x_test_3.csv')
+    real_testing(df_test[1170000:1560000], 'x_test_4.csv', './new/x_test_4.csv')
+    real_testing(df_test[1560000:1950000], 'x_test_5.csv', './new/x_test_5.csv')
+    real_testing(df_test[1950000:], 'x_test_6.csv', './new/x_test_6.csv')
 
     #Finally!
     x_train = pd.read_csv('./x_train.csv').fillna("")
@@ -796,3 +847,5 @@ if __name__ == '__main__':
 
     res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
     res.to_csv("res_basic_nlp_testhash_1500.csv", index = False)
+
+    #After submitting paste files in ./new to ./ -- Building upon the already generated features
