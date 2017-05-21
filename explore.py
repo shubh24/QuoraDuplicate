@@ -321,6 +321,57 @@ def neighbor_intersection(row):
 
     return len(common_neighbors)/(len(q1_neighbors) + len(q2_neighbors) - len(common_neighbors))
 
+def q1_second_degree_freq(row):
+
+    q1_neighbors = graph[row["question1"]]
+
+    q1_second_degree_neighbors = []
+    for i in q1_neighbors:
+        q1_second_degree_neighbors += graph[i]
+
+    return len(q1_second_degree_neighbors)
+
+def q2_second_degree_freq(row):
+
+    q2_neighbors = graph[row["question2"]]
+
+    q2_second_degree_neighbors = []
+    for i in q2_neighbors:
+        q2_second_degree_neighbors += graph[i]
+
+    return len(q2_second_degree_neighbors)
+
+
+def second_degree_intersection(row):
+
+    q1_neighbors = graph[row["question1"]]
+    q2_neighbors = graph[row["question2"]]
+
+    q1_second_degree_neighbors = []
+    for i in q1_neighbors:
+        q1_second_degree_neighbors += graph[i]
+
+    q2_second_degree_neighbors = []
+    for i in q2_neighbors:
+        q2_second_degree_neighbors += graph[i]
+    
+    common_second_degree_neighbors = set(q1_second_degree_neighbors).intersection(q2_second_degree_neighbors)
+
+    return len(common_second_degree_neighbors)/(len(q1_second_degree_neighbors) + len(q2_second_degree_neighbors) - len(common_second_degree_neighbors))
+
+# def pos_neighbor_intersection(row):
+
+#     if row["question1"] in pos_graph and row["question2"] in pos_graph:
+#         q1_neighbors = pos_graph[row["question1"]]
+#         q2_neighbors = pos_graph[row["question2"]]
+
+#         common_neighbors = set(q1_neighbors).intersection(q2_neighbors)
+
+#         return len(common_neighbors)/(len(q1_neighbors) + len(q2_neighbors) - len(common_neighbors))
+
+#     else:
+#         return 0
+
 def get_word_bigrams(words):
 
     ngrams = []
@@ -412,7 +463,6 @@ def augment_rows():
             for j in q2_list:
                 if i != j:                    
                     if j not in graph[i]:
-                        print "hi"
                         new_graph[i].append(j)
 
     # new_df_train = df_train[["question1", "question2", "is_duplicate"]]
@@ -459,6 +509,8 @@ def oversample(x_train):
 
     return pd.concat([pos_train, neg_train])
 
+#When plotted a histogram of degrees, only -1,1 and 2 are observed. Which means either you're max 2 degree separated or you're separate(with 5 as a cutoff). 
+#Will try having 0.5*(number of second degree connections) and its intersection as a feature
 def bfs(q_node, q_search, separation):
 
     if separation > 5:
@@ -476,7 +528,7 @@ def bfs(q_node, q_search, separation):
 
                 if i > 5:
                     return shortest_res
-                    
+
                 bfs_res = bfs(j, q_search, separation + 1)
 
                 if bfs_res != -1 and bfs_res < shortest_res:
@@ -605,6 +657,32 @@ def validate(training):
 
     return(x_train, x_valid, y_train, y_valid)
 
+def real_testing(dataframe, filename):
+
+    dataframe_modified = dataframe.apply(basic_nlp, axis = 1)
+    dataframe_modified["neighbor_intersection"] = dataframe.apply(neighbor_intersection, axis = 1)
+    q1_second_degree_freq = dataframe.apply(q1_second_degree_freq, axis = 1)
+    q2_second_degree_freq = dataframe.apply(q2_second_degree_freq, axis = 1)
+    dataframe_modified["second_degree_avg"] = (q1_second_degree_freq + q2_second_degree_freq)/2
+    dataframe_modified["second_degree_diff"] = abs(q1_second_degree_freq - q2_second_degree_freq)
+    dataframe_modified["second_degree_intersection"] = dataframe.apply(second_degree_intersection, axis = 1)
+    # dataframe_modified["separation"] = dataframe.progress_apply(initialize_bfs, axis = 1)
+    
+    dataframe_modified.to_csv(filename, index=False)
+    # %reset_selective dataframe_modified 
+
+def pred_n_submit(x_train, x_label, test_filename, test_id_df, res_filename):
+
+    x_test = pd.read_csv(test_filename).fillna("")
+    res_1 = run_xgb(x_train, x_test, x_label)
+    sub = pd.DataFrame()
+
+    sub['test_id'] = test_id_df['test_id']
+    sub['is_duplicate'] = res_1
+
+    sub.to_csv(res_filename, index=False)   
+    # %reset_selective -f x_test_1   
+
 if __name__ == '__main__':
     
     df_train = pd.read_csv('./train.csv').fillna("")
@@ -681,41 +759,13 @@ if __name__ == '__main__':
     #Compare res & y_valid
 
     #Real Testing
-    x_train = df_train.apply(basic_nlp, axis = 1)
-    x_train["neighbor_intersection"] = df_train.apply(neighbor_intersection, axis = 1)
-    x_train["separation"] = df_train.apply(initialize_bfs, axis = 1)
-    x_train.to_csv('./new/x_train.csv', index=False)
-    %reset_selective x_train 
-
-    x_test_1 = df_test[0:390000].apply(basic_nlp, axis = 1)
-    x_test_1["neighbor_intersection"] = df_test[0:390000].apply(neighbor_intersection, axis = 1)
-    x_test_1.to_csv('./new/x_test_1.csv', index=False)   
-    %reset_selective x_test_1   
-
-    x_test_2 = df_test[390000:780000].apply(basic_nlp, axis = 1)
-    x_test_2["neighbor_intersection"] = df_test[390000:780000].apply(neighbor_intersection, axis = 1)
-    x_test_2.to_csv('./new/x_test_2.csv', index=False)
-    %reset_selective x_test_2   
-
-    x_test_3 = df_test[780000:1170000].apply(basic_nlp, axis = 1)
-    x_test_3["neighbor_intersection"] = df_test[780000:1170000].apply(neighbor_intersection, axis = 1)
-    x_test_3.to_csv('./new/x_test_3.csv', index=False)   
-    %reset_selective x_test_3   
-
-    x_test_4 = df_test[1170000:1560000].apply(basic_nlp, axis = 1)
-    x_test_4["neighbor_intersection"] = df_test[1170000:1560000].apply(neighbor_intersection, axis = 1)
-    x_test_4.to_csv('./new/x_test_4.csv', index=False)   
-    %reset_selective x_test_4   
-
-    x_test_5 = df_test[1560000:1950000].apply(basic_nlp, axis = 1)
-    x_test_5["neighbor_intersection"] = df_test[1560000:1950000].apply(neighbor_intersection, axis = 1)
-    x_test_5.to_csv('./new/x_test_5.csv', index=False)   
-    %reset_selective x_test_5   
-
-    x_test_6 = df_test[1950000:].apply(basic_nlp, axis = 1)
-    x_test_6["neighbor_intersection"] = df_test[1950000:].apply(neighbor_intersection, axis = 1)
-    x_test_6.to_csv('./new/x_test_6.csv', index=False)   
-    %reset_selective x_test_6   
+    real_testing(df_train, './new/x_train.csv')
+    real_testing(df_test[0:390000], './new/x_test_1.csv')
+    real_testing(df_test[390000:780000], './new/x_test_2.csv')
+    real_testing(df_test[780000:1170000], './new/x_test_3.csv')
+    real_testing(df_test[1170000:1560000], './new/x_test_4.csv')
+    real_testing(df_test[1560000:1950000], './new/x_test_5.csv')
+    real_testing(df_test[1950000:], './new/x_test_6.csv')
 
     #Finally!
     x_train = pd.read_csv('./x_train.csv').fillna("")
@@ -730,53 +780,12 @@ if __name__ == '__main__':
         # res_oversampled = run_xgb(x_train_oversampled, x_test, x_label_oversampled)
         # submit(res_oversampled)
 
-    x_test_1 = pd.read_csv('./x_test_1.csv').fillna("")
-    res_1 = run_xgb(x_train, x_test_1, x_label)
-    sub = pd.DataFrame()
-    sub['test_id'] = df_test[0:390000]['test_id']
-    sub['is_duplicate'] = res_1
-    sub.to_csv('res_1.csv', index=False)   
-    %reset_selective -f x_test_1   
-
-    x_test_2 = pd.read_csv('./x_test_2.csv').fillna("")
-    res_2 = run_xgb(x_train, x_test_2, x_label)
-    sub = pd.DataFrame()
-    sub['test_id'] = df_test[390000:780000]['test_id']
-    sub['is_duplicate'] = res_2
-    sub.to_csv('res_2.csv', index=False)   
-    %reset_selective -f x_test_2   
-
-    x_test_3 = pd.read_csv('./x_test_3.csv').fillna("")
-    res_3 = run_xgb(x_train, x_test_3, x_label)
-    sub = pd.DataFrame()
-    sub['test_id'] = df_test[780000:1170000]['test_id']
-    sub['is_duplicate'] = res_3
-    sub.to_csv('res_3.csv', index=False)   
-    %reset_selective -f x_test_3   
-
-    x_test_4 = pd.read_csv('./x_test_4.csv').fillna("")
-    res_4 = run_xgb(x_train, x_test_4, x_label)
-    sub = pd.DataFrame()
-    sub['test_id'] = df_test[1170000:1560000]['test_id']
-    sub['is_duplicate'] = res_4
-    sub.to_csv('res_4.csv', index=False)   
-    %reset_selective -f x_test_4   
-
-    x_test_5 = pd.read_csv('./x_test_5.csv').fillna("")
-    res_5 = run_xgb(x_train, x_test_5, x_label)
-    sub = pd.DataFrame()
-    sub['test_id'] = df_test[1560000:1950000]['test_id']
-    sub['is_duplicate'] = res_5
-    sub.to_csv('res_5.csv', index=False)   
-    %reset_selective -f x_test_5   
-
-    x_test_6 = pd.read_csv('./x_test_6.csv').fillna("")
-    res_6 = run_xgb(x_train, x_test_6, x_label)
-    sub = pd.DataFrame()
-    sub['test_id'] = df_test[1950000:]['test_id']
-    sub['is_duplicate'] = res_6
-    sub.to_csv('res_6.csv', index=False)   
-    %reset_selective -f x_test_6   
+    pred_n_submit(x_train, x_label, './new/x_test_1.csv', df_test[0:390000], './new/res_1.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_2.csv', df_test[390000:780000], './new/res_2.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_3.csv', df_test[780000:1170000], './new/res_3.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_4.csv', df_test[1170000:1560000], './new/res_4.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_5.csv', df_test[1560000:1950000], './new/res_5.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_6.csv', df_test[1950000:], './new/res_6.csv')
 
     res_1 = pd.read_csv('./res_1.csv').fillna("")
     res_2 = pd.read_csv('./res_2.csv').fillna("")
@@ -784,6 +793,6 @@ if __name__ == '__main__':
     res_4 = pd.read_csv('./res_4.csv').fillna("")
     res_5 = pd.read_csv('./res_5.csv').fillna("")
     res_6 = pd.read_csv('./res_6.csv').fillna("")
+
     res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
     res.to_csv("res_basic_nlp_testhash_1500.csv", index = False)
-    # submit(res)
