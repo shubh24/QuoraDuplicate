@@ -725,7 +725,7 @@ def real_testing(dataframe, existing_df, filename):
 
 def pred_n_submit(x_train, x_label, test_filename, test_id_df, res_filename):
 
-    x_test = pd.read_csv(test_filename).fillna("")
+    x_test = pd.read_csv(test_filename).fillna(0)
     res_1 = run_xgb(x_train, x_test, x_label)
     sub = pd.DataFrame()
 
@@ -819,7 +819,7 @@ if __name__ == '__main__':
     real_testing(df_test[1950000:], 'x_test_6.csv', './new/x_test_6.csv')
 
     #Finally!
-    x_train = pd.read_csv('./x_train.csv').fillna("")
+    x_train = pd.read_csv('./new/x_train.csv').fillna("")
     x_label = df_train.is_duplicate
     # x_test = pd.concat([x_test_1, x_test_2, x_test_3, x_test_4, x_test_5, x_test_6])
 
@@ -838,14 +838,14 @@ if __name__ == '__main__':
     pred_n_submit(x_train, x_label, './new/x_test_5.csv', df_test[1560000:1950000], './new/res_5.csv')
     pred_n_submit(x_train, x_label, './new/x_test_6.csv', df_test[1950000:], './new/res_6.csv')
 
-    res_1 = pd.read_csv('./res_1.csv').fillna("")
-    res_2 = pd.read_csv('./res_2.csv').fillna("")
-    res_3 = pd.read_csv('./res_3.csv').fillna("")
-    res_4 = pd.read_csv('./res_4.csv').fillna("")
-    res_5 = pd.read_csv('./res_5.csv').fillna("")
-    res_6 = pd.read_csv('./res_6.csv').fillna("")
+    res_1 = pd.read_csv('./new/res_1.csv').fillna("")
+    res_2 = pd.read_csv('./new/res_2.csv').fillna("")
+    res_3 = pd.read_csv('./new/res_3.csv').fillna("")
+    res_4 = pd.read_csv('./new/res_4.csv').fillna("")
+    res_5 = pd.read_csv('./new/res_5.csv').fillna("")
+    res_6 = pd.read_csv('./new/res_6.csv').fillna("")
 
     res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
-    res.to_csv("res_basic_nlp_testhash_1500.csv", index = False)
+    res.to_csv("res_nbr_intersect_partial.csv", index = False)
 
     #After submitting paste files in ./new to ./ -- Building upon the already generated features
