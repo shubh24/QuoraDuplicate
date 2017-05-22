@@ -372,7 +372,7 @@ def get_q1_second_degree_freq(row):
     for i in q1_neighbors:
         q1_second_degree_neighbors += graph[i]
 
-    return len(q1_second_degree_neighbors)
+    return len(set(q1_second_degree_neighbors))
 
 def get_q2_second_degree_freq(row):
 
@@ -382,7 +382,7 @@ def get_q2_second_degree_freq(row):
     for i in q2_neighbors:
         q2_second_degree_neighbors += graph[i]
 
-    return len(q2_second_degree_neighbors)
+    return len(set(q2_second_degree_neighbors))
 
 
 def second_degree_intersection(row):
@@ -398,9 +398,9 @@ def second_degree_intersection(row):
     for i in q2_neighbors:
         q2_second_degree_neighbors += graph[i]
     
-    common_second_degree_neighbors = set(q1_second_degree_neighbors).intersection(q2_second_degree_neighbors)
+    common_second_degree_neighbors = set(q1_second_degree_neighbors).intersection(set(q2_second_degree_neighbors))
 
-    return len(common_second_degree_neighbors)/(len(q1_second_degree_neighbors) + len(q2_second_degree_neighbors) - len(common_second_degree_neighbors))
+    return len(common_second_degree_neighbors)/(len(set(q1_second_degree_neighbors)) + len(set(q2_second_degree_neighbors)) - len(common_second_degree_neighbors))
 
 # def pos_neighbor_intersection(row):
 
@@ -704,14 +704,13 @@ def real_testing(dataframe, existing_df, filename):
 
     # dataframe_modified = dataframe.progress_apply(basic_nlp, axis = 1)
     dataframe_modified = pd.read_csv(existing_df).fillna("")
+    # ne_dataframe = dataframe.progress_apply(get_ne_score, axis = 1)
+    # dataframe_modified["q1_ne_ratio"] = ne_dataframe.q1_ne_ratio
+    # dataframe_modified["q2_ne_ratio"] = ne_dataframe.q2_ne_ratio
+    # dataframe_modified["ne_diff"] = ne_dataframe.ne_diff
+    # dataframe_modified["ne_score"] = ne_dataframe.ne_score
 
-    ne_dataframe = dataframe.progress_apply(get_ne_score, axis = 1)
-    dataframe_modified["q1_ne_ratio"] = ne_dataframe.q1_ne_ratio
-    dataframe_modified["q2_ne_ratio"] = ne_dataframe.q2_ne_ratio
-    dataframe_modified["ne_diff"] = ne_dataframe.ne_diff
-    dataframe_modified["ne_score"] = ne_dataframe.ne_score
-    print "hehe"
-    dataframe_modified["neighbor_intersection"] = dataframe.apply(neighbor_intersection, axis = 1)
+    # dataframe_modified["neighbor_intersection"] = dataframe.apply(neighbor_intersection, axis = 1)
 
     q1_second_degree_freq = dataframe.apply(get_q1_second_degree_freq, axis = 1)
     q2_second_degree_freq = dataframe.apply(get_q2_second_degree_freq, axis = 1)
@@ -783,7 +782,7 @@ if __name__ == '__main__':
 
     graph = {}
     df_train.apply(generate_graph_table, axis = 1)
-    df_test.apply(generate_graph_table, axis = 1)
+    df_test.progress_apply(generate_graph_table, axis = 1)
     with open('graph.pickle', 'wb') as handle:
         pickle.dump(graph, handle)
     with open('graph.pickle', 'rb') as handle:
