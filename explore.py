@@ -362,7 +362,7 @@ def neighbor_intersection(row):
 
     common_neighbors = set(q1_neighbors).intersection(q2_neighbors)
 
-    return len(common_neighbors)/(len(q1_neighbors) + len(q2_neighbors) - len(common_neighbors))
+    return len(common_neighbors)
 
 def get_q1_second_degree_freq(row):
 
@@ -400,7 +400,7 @@ def second_degree_intersection(row):
     
     common_second_degree_neighbors = set(q1_second_degree_neighbors).intersection(set(q2_second_degree_neighbors))
 
-    return len(common_second_degree_neighbors)/(len(set(q1_second_degree_neighbors)) + len(set(q2_second_degree_neighbors)) - len(common_second_degree_neighbors))
+    return len(common_second_degree_neighbors)
 
 # def pos_neighbor_intersection(row):
 
@@ -710,7 +710,10 @@ def real_testing(dataframe, existing_df, filename):
     # dataframe_modified["ne_diff"] = ne_dataframe.ne_diff
     # dataframe_modified["ne_score"] = ne_dataframe.ne_score
 
-    # dataframe_modified["neighbor_intersection"] = dataframe.apply(neighbor_intersection, axis = 1)
+    dataframe_modified["neighbor_intersection"] = dataframe.apply(neighbor_intersection, axis = 1)
+    # del dataframe_modified["second_degree_avg"]
+    # del dataframe_modified["second_degree_intersection"]
+    # del dataframe_modified["second_degree_diff"]
 
     q1_second_degree_freq = dataframe.apply(get_q1_second_degree_freq, axis = 1)
     q2_second_degree_freq = dataframe.apply(get_q2_second_degree_freq, axis = 1)
@@ -845,6 +848,6 @@ if __name__ == '__main__':
     res_6 = pd.read_csv('./new/res_6.csv').fillna("")
 
     res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
-    res.to_csv("res_nbr_intersect_partial.csv", index = False)
+    res.to_csv("res_new_res_one_counts.csv", index = False)
 
     #After submitting paste files in ./new to ./ -- Building upon the already generated features
