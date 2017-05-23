@@ -20,7 +20,8 @@ import plotly.graph_objs as go
 from matplotlib import pyplot
 from sklearn.manifold import TSNE
 import pickle
-
+from tqdm import tqdm, tqdm_pandas
+tqdm_pandas(tqdm())
 import spacy
 nlp = spacy.load('en')
 
@@ -66,7 +67,7 @@ def get_ne_score(row):
     q1_words = str(row.question1).lower().split()
     q2_words = str(row.question2).lower().split()
 
-    all_words_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words])
+    # all_words_score = np.sum([weights.get(w, 0) for w in q1_words]) + np.sum([weights.get(w, 0) for w in q2_words])
 
     q1 = nlp(unicode(str(row["question1"]), "utf-8"))
     q2 = nlp(unicode(str(row["question2"]), "utf-8"))
@@ -80,20 +81,20 @@ def get_ne_score(row):
     if len(q1_ne) == 0:
         q1_ne_ratio = 0
     else:
-        q1_ne_ratio = np.sum([weights.get(w, 0) for w in q1_ne])/np.sum([weights.get(w, 0) for w in q1_words])
+        q1_ne_ratio = len(q1_ne)/len(q1_words)
 
     if len(q2_ne) == 0:
         q2_ne_ratio = 0
     else:
-        q2_ne_ratio = np.sum([weights.get(w, 0) for w in q2_ne])/np.sum([weights.get(w, 0) for w in q2_words])
+        q2_ne_ratio = len(q2_ne)/len(q2_words)
 
     common_ne = list(q1_ne.intersection(q2_ne))
-    common_ne_weights = np.sum([weights.get(w, 0) for w in common_ne])
+    # common_ne_weights = np.sum([weights.get(w, 0) for w in common_ne])
 
     if len(q1_ne) + len(q2_ne) == 0:
         common_ne_score = 0
     else:
-       common_ne_score = common_ne_weights/(all_words_score - common_ne_weights)
+       common_ne_score = len(common_ne)/(len(q1_words) + len(q2_words) - len(common_ne))
 
     return pd.Series({
         "q1_ne_ratio": q1_ne_ratio,
@@ -161,20 +162,20 @@ def basic_nlp(row):
     if len(q1_ne) == 0:
         q1_ne_ratio = 0
     else:
-        q1_ne_ratio = np.sum([weights.get(w, 0) for w in q1_ne])/np.sum([weights.get(w, 0) for w in q1_words])
+        q1_ne_ratio = len(q1_ne)/len(q1_words)
 
     if len(q2_ne) == 0:
         q2_ne_ratio = 0
     else:
-        q2_ne_ratio = np.sum([weights.get(w, 0) for w in q2_ne])/np.sum([weights.get(w, 0) for w in q2_words])
+        q2_ne_ratio = len(q2_ne)/len(q2_words)
 
     common_ne = list(q1_ne.intersection(q2_ne))
-    common_ne_weights = np.sum([weights.get(w, 0) for w in common_ne])
+    # common_ne_weights = np.sum([weights.get(w, 0) for w in common_ne])
 
     if len(q1_ne) + len(q2_ne) == 0:
         common_ne_score = 0
     else:
-       common_ne_score = common_ne_weights/(all_words_score - common_ne_weights)
+       common_ne_score = len(common_ne)/(len(q1_words) + len(q2_words) - len(common_ne))
 
     pos_hash = {}
     common_pos = []
@@ -288,6 +289,7 @@ def basic_nlp(row):
     # if hash_key1 in pos_hash_table:
     #     q1_dup_ratio = pos_hash_table[hash_key1]/q1_hash_freq
     # else:
+
     #     q1_dup_ratio = 0
 
     # if hash_key2 in pos_hash_table:
@@ -700,34 +702,30 @@ def validate(training):
 
     return(x_train, x_valid, y_train, y_valid)
 
-def real_testing(dataframe, existing_df, filename):
+def real_testing(df_with_qs, gen_filename):
 
-    # dataframe_modified = dataframe.progress_apply(basic_nlp, axis = 1)
-    dataframe_modified = pd.read_csv(existing_df).fillna("")
-    # ne_dataframe = dataframe.progress_apply(get_ne_score, axis = 1)
-    # dataframe_modified["q1_ne_ratio"] = ne_dataframe.q1_ne_ratio
-    # dataframe_modified["q2_ne_ratio"] = ne_dataframe.q2_ne_ratio
-    # dataframe_modified["ne_diff"] = ne_dataframe.ne_diff
-    # dataframe_modified["ne_score"] = ne_dataframe.ne_score
+    dataframe_modified = df_with_qs.progress_apply(basic_nlp, axis = 1)
+    old_filename = './old/' + gen_filename 
+    dataframe_modified.to_csv(old_filename, index = False)
+    # dataframe_modified = pd.read_csv(old_filename).fillna(0)
 
-    dataframe_modified["neighbor_intersection"] = dataframe.apply(neighbor_intersection, axis = 1)
-    # del dataframe_modified["second_degree_avg"]
-    # del dataframe_modified["second_degree_intersection"]
-    # del dataframe_modified["second_degree_diff"]
+    # dataframe_modified["neighbor_intersection"] = df_with_qs.apply(neighbor_intersection, axis = 1)
 
-    q1_second_degree_freq = dataframe.apply(get_q1_second_degree_freq, axis = 1)
-    q2_second_degree_freq = dataframe.apply(get_q2_second_degree_freq, axis = 1)
-    dataframe_modified["second_degree_avg"] = (q1_second_degree_freq + q2_second_degree_freq)/2
-    dataframe_modified["second_degree_diff"] = abs(q1_second_degree_freq - q2_second_degree_freq)
-    dataframe_modified["second_degree_intersection"] = dataframe.apply(second_degree_intersection, axis = 1)
+    # q1_second_degree_freq = dataframe.apply(get_q1_second_degree_freq, axis = 1)
+    # q2_second_degree_freq = dataframe.apply(get_q2_second_degree_freq, axis = 1)
+    # dataframe_modified["second_degree_avg"] = (q1_second_degree_freq + q2_second_degree_freq)/2
+    # dataframe_modified["second_degree_diff"] = abs(q1_second_degree_freq - q2_second_degree_freq)
+    # dataframe_modified["second_degree_intersection"] = dataframe.apply(second_degree_intersection, axis = 1)
     # dataframe_modified["separation"] = dataframe.progress_apply(initialize_bfs, axis = 1)
-    
-    dataframe_modified.to_csv(filename, index=False)
+
+    # new_filename = "./new/" + gen_filename    
+    # dataframe_modified.to_csv(new_filename, index=False)
     # %reset_selective dataframe_modified 
 
 def pred_n_submit(x_train, x_label, test_filename, test_id_df, res_filename):
 
     x_test = pd.read_csv(test_filename).fillna(0)
+
     res_1 = run_xgb(x_train, x_test, x_label)
     sub = pd.DataFrame()
 
@@ -749,21 +747,23 @@ if __name__ == '__main__':
     # tfidf = TfidfVectorizer(max_features = 256, stop_words='english', ngram_range=(1, 1))
     # tfidf.fit_transform(train_qs[0:2500])
 
-    words = (" ".join(qs)).lower().split()
-    counts = Counter(words)
-    weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
-    with open('word_weights.pickle', 'wb') as handle:
-        pickle.dump(weights, handle)
+    #Load up the Weights Dictionary
+    # words = (" ".join(qs)).lower().split()
+    # counts = Counter(words)
+    # weights = {word: get_inverse_freq(1/(10000 + int(count)), count) for word, count in counts.items()}
+    # with open('word_weights.pickle', 'wb') as handle:
+    #     pickle.dump(weights, handle)
     with open('word_weights.pickle', 'rb') as handle:
         weights = pickle.load(handle)
  
     stops = set(stopwords.words("english")) 
 
-    hash_table = {}
-    df_train.apply(generate_hash_freq, axis = 1)
-    df_test.apply(generate_hash_freq, axis = 1)
-    with open('hash_table.pickle', 'wb') as handle:
-        pickle.dump(hash_table, handle)
+    #Load up the hashtable
+    # hash_table = {}
+    # df_train.apply(generate_hash_freq, axis = 1)
+    # df_test.apply(generate_hash_freq, axis = 1)
+    # with open('hash_table.pickle', 'wb') as handle:
+    #     pickle.dump(hash_table, handle)
     with open('hash_table.pickle', 'rb') as handle:
         hash_table = pickle.load(handle)
 
@@ -775,55 +775,51 @@ if __name__ == '__main__':
     # with open('pos_hash_table.pickle', 'rb') as handle:
     #     pos_hash_table = pickle.load(handle)
 
-    hash_table_ne = {}
-    df_train.apply(generate_ne_freq, axis = 1)
-    df_test.apply(generate_ne_freq, axis = 1)
-    with open('hash_table_ne.pickle', 'wb') as handle:
-        pickle.dump(hash_table_ne, handle)
-    with open('hash_table_ne.pickle', 'rb') as handle:
-        hash_table_ne = pickle.load(handle)
+    # hash_table_ne = {}
+    # df_train.apply(generate_ne_freq, axis = 1)
+    # df_test.apply(generate_ne_freq, axis = 1)
+    # with open('hash_table_ne.pickle', 'wb') as handle:
+    #     pickle.dump(hash_table_ne, handle)
+    # with open('hash_table_ne.pickle', 'rb') as handle:
+    #     hash_table_ne = pickle.load(handle)
 
-    graph = {}
-    df_train.apply(generate_graph_table, axis = 1)
-    df_test.progress_apply(generate_graph_table, axis = 1)
-    with open('graph.pickle', 'wb') as handle:
-        pickle.dump(graph, handle)
+    #Load up the graph!
+    # graph = {}
+    # df_train.apply(generate_graph_table, axis = 1)
+    # df_test.progress_apply(generate_graph_table, axis = 1)
+    # with open('graph.pickle', 'wb') as handle:
+    #     pickle.dump(graph, handle)
     with open('graph.pickle', 'rb') as handle:
         graph = pickle.load(handle)
 
-    pos_graph = {}
-    df_train.apply(generate_positive_graph, axis = 1)
-    with open('pos_graph.pickle', 'wb') as handle:
-        pickle.dump(pos_graph, handle)
-    with open('pos_graph.pickle', 'rb') as handle:
-        pos_graph = pickle.load(handle)
+    # pos_graph = {}
+    # df_train.apply(generate_positive_graph, axis = 1)
+    # with open('pos_graph.pickle', 'wb') as handle:
+    #     pickle.dump(pos_graph, handle)
+    # with open('pos_graph.pickle', 'rb') as handle:
+    #     pos_graph = pickle.load(handle)
 
-    new_df_test = df_test
-    df_test.apply(augment_test, axis = 1)
+    #Augment Test Data
+    # new_df_test = df_test
+    # df_test.apply(augment_test, axis = 1)
 
     #Validation
-    x_train, x_test, y_train, y_valid = validate(df_train)
-    x_train_feat = x_train.apply(basic_nlp, axis = 1)
-    x_test_feat = x_test.apply(basic_nlp, axis = 1)
-    res = run_xgb(x_train_feat, x_test_feat, y_train, y_valid)
+    # x_train, x_test, y_train, y_valid = validate(df_train)
+    # x_train_feat = x_train.apply(basic_nlp, axis = 1)
+    # x_test_feat = x_test.apply(basic_nlp, axis = 1)
+    # res = run_xgb(x_train_feat, x_test_feat, y_train, y_valid)
 
-    # res = controller(x_train, x_valid, y_train, y_valid)
-
-    #Compare res & y_valid
-
-    #Real Testing
-    real_testing(df_train, 'x_train.csv', './new/x_train.csv')
-    real_testing(df_test[0:390000], 'x_test_1.csv', './new/x_test_1.csv')
-    real_testing(df_test[390000:780000], 'x_test_2.csv', './new/x_test_2.csv')
-    real_testing(df_test[780000:1170000], 'x_test_3.csv', './new/x_test_3.csv')
-    real_testing(df_test[1170000:1560000], 'x_test_4.csv', './new/x_test_4.csv')
-    real_testing(df_test[1560000:1950000], 'x_test_5.csv', './new/x_test_5.csv')
-    real_testing(df_test[1950000:], 'x_test_6.csv', './new/x_test_6.csv')
+    real_testing(df_train, 'x_train.csv')
+    real_testing(df_test[0:390000], 'x_test_1.csv')
+    real_testing(df_test[390000:780000], 'x_test_2.csv')
+    real_testing(df_test[780000:1170000], 'x_test_3.csv')
+    real_testing(df_test[1170000:1560000], 'x_test_4.csv')
+    real_testing(df_test[1560000:1950000], 'x_test_5.csv')
+    real_testing(df_test[1950000:], 'x_test_6.csv')
 
     #Finally!
-    x_train = pd.read_csv('./new/x_train.csv').fillna("")
+    x_train = pd.read_csv('./old/x_train.csv').fillna(0)
     x_label = df_train.is_duplicate
-    # x_test = pd.concat([x_test_1, x_test_2, x_test_3, x_test_4, x_test_5, x_test_6])
 
     if oversample_label == 1:
         x_train["is_duplicate"] = df_train.is_duplicate
@@ -833,21 +829,21 @@ if __name__ == '__main__':
         # res_oversampled = run_xgb(x_train_oversampled, x_test, x_label_oversampled)
         # submit(res_oversampled)
 
-    pred_n_submit(x_train, x_label, './new/x_test_1.csv', df_test[0:390000], './new/res_1.csv')
-    pred_n_submit(x_train, x_label, './new/x_test_2.csv', df_test[390000:780000], './new/res_2.csv')
-    pred_n_submit(x_train, x_label, './new/x_test_3.csv', df_test[780000:1170000], './new/res_3.csv')
-    pred_n_submit(x_train, x_label, './new/x_test_4.csv', df_test[1170000:1560000], './new/res_4.csv')
-    pred_n_submit(x_train, x_label, './new/x_test_5.csv', df_test[1560000:1950000], './new/res_5.csv')
-    pred_n_submit(x_train, x_label, './new/x_test_6.csv', df_test[1950000:], './new/res_6.csv')
+    pred_n_submit(x_train, x_label, './old/x_test_1.csv', df_test[0:390000], './res_files/res_1.csv')
+    pred_n_submit(x_train, x_label, './old/x_test_2.csv', df_test[390000:780000], './res_files/res_2.csv')
+    pred_n_submit(x_train, x_label, './old/x_test_3.csv', df_test[780000:1170000], './res_files/res_3.csv')
+    pred_n_submit(x_train, x_label, './old/x_test_4.csv', df_test[1170000:1560000], './res_files/res_4.csv')
+    pred_n_submit(x_train, x_label, './old/x_test_5.csv', df_test[1560000:1950000], './res_files/res_5.csv')
+    pred_n_submit(x_train, x_label, './old/x_test_6.csv', df_test[1950000:], './new/res_6.csv')
 
-    res_1 = pd.read_csv('./new/res_1.csv').fillna("")
-    res_2 = pd.read_csv('./new/res_2.csv').fillna("")
-    res_3 = pd.read_csv('./new/res_3.csv').fillna("")
-    res_4 = pd.read_csv('./new/res_4.csv').fillna("")
-    res_5 = pd.read_csv('./new/res_5.csv').fillna("")
-    res_6 = pd.read_csv('./new/res_6.csv').fillna("")
+    res_1 = pd.read_csv('./res_files/res_1.csv').fillna("")
+    res_2 = pd.read_csv('./res_files/res_2.csv').fillna("")
+    res_3 = pd.read_csv('./res_files/res_3.csv').fillna("")
+    res_4 = pd.read_csv('./res_files/res_4.csv').fillna("")
+    res_5 = pd.read_csv('./res_files/res_5.csv').fillna("")
+    res_6 = pd.read_csv('./res_files/res_6.csv').fillna("")
 
-    res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
-    res.to_csv("res_new_res_one_counts.csv", index = False)
+    res = pd.concat([sub, res_2, res_3, res_4, res_5, res_6])
+    res.to_csv("jus_tryin.csv", index = False)
 
-    #After submitting paste files in ./new to ./ -- Building upon the already generated features
+    #After submitting paste files in ./new to ./old -- Building upon the already generated features
