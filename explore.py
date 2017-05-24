@@ -645,7 +645,7 @@ def run_xgb(x_train, x_test, x_label):
 
     watchlist = [(d_train, 'train')]
 
-    bst = xgb.train(params, d_train, 1500, watchlist, early_stopping_rounds=50, verbose_eval=50)
+    bst = xgb.train(params, d_train, 100, watchlist, early_stopping_rounds=50, verbose_eval=50)
 
     p_test = bst.predict(d_test)
 
@@ -704,12 +704,14 @@ def validate(training):
 
 def real_testing(df_with_qs, gen_filename):
 
-    dataframe_modified = df_with_qs.progress_apply(basic_nlp, axis = 1)
+    # Required for initial setup!
+    # dataframe_modified = df_with_qs.progress_apply(basic_nlp, axis = 1)
     old_filename = './old/' + gen_filename 
-    dataframe_modified.to_csv(old_filename, index = False)
-    # dataframe_modified = pd.read_csv(old_filename).fillna(0)
+    # dataframe_modified.to_csv(old_filename, index = False)
 
-    # dataframe_modified["neighbor_intersection"] = df_with_qs.apply(neighbor_intersection, axis = 1)
+    dataframe_modified = pd.read_csv(old_filename).fillna("")
+
+    dataframe_modified["neighbor_intersection"] = df_with_qs.apply(neighbor_intersection, axis = 1)
 
     # q1_second_degree_freq = dataframe.apply(get_q1_second_degree_freq, axis = 1)
     # q2_second_degree_freq = dataframe.apply(get_q2_second_degree_freq, axis = 1)
@@ -718,13 +720,13 @@ def real_testing(df_with_qs, gen_filename):
     # dataframe_modified["second_degree_intersection"] = dataframe.apply(second_degree_intersection, axis = 1)
     # dataframe_modified["separation"] = dataframe.progress_apply(initialize_bfs, axis = 1)
 
-    # new_filename = "./new/" + gen_filename    
-    # dataframe_modified.to_csv(new_filename, index=False)
+    new_filename = "./new/" + gen_filename    
+    dataframe_modified.to_csv(new_filename, index=False)
     # %reset_selective dataframe_modified 
 
 def pred_n_submit(x_train, x_label, test_filename, test_id_df, res_filename):
 
-    x_test = pd.read_csv(test_filename).fillna(0)
+    x_test = pd.read_csv(test_filename).fillna("")
 
     res_1 = run_xgb(x_train, x_test, x_label)
     sub = pd.DataFrame()
@@ -818,8 +820,9 @@ if __name__ == '__main__':
     real_testing(df_test[1950000:], 'x_test_6.csv')
 
     #Finally!
-    x_train = pd.read_csv('./old/x_train.csv').fillna(0)
+    x_train = pd.read_csv('./new/x_train.csv').fillna("")
     x_label = df_train.is_duplicate
+    oversample_label = 0
 
     if oversample_label == 1:
         x_train["is_duplicate"] = df_train.is_duplicate
@@ -829,12 +832,12 @@ if __name__ == '__main__':
         # res_oversampled = run_xgb(x_train_oversampled, x_test, x_label_oversampled)
         # submit(res_oversampled)
 
-    pred_n_submit(x_train, x_label, './old/x_test_1.csv', df_test[0:390000], './res_files/res_1.csv')
-    pred_n_submit(x_train, x_label, './old/x_test_2.csv', df_test[390000:780000], './res_files/res_2.csv')
-    pred_n_submit(x_train, x_label, './old/x_test_3.csv', df_test[780000:1170000], './res_files/res_3.csv')
-    pred_n_submit(x_train, x_label, './old/x_test_4.csv', df_test[1170000:1560000], './res_files/res_4.csv')
-    pred_n_submit(x_train, x_label, './old/x_test_5.csv', df_test[1560000:1950000], './res_files/res_5.csv')
-    pred_n_submit(x_train, x_label, './old/x_test_6.csv', df_test[1950000:], './new/res_6.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_1.csv', df_test[0:390000], './res_files/res_1.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_2.csv', df_test[390000:780000], './res_files/res_2.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_3.csv', df_test[780000:1170000], './res_files/res_3.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_4.csv', df_test[1170000:1560000], './res_files/res_4.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_5.csv', df_test[1560000:1950000], './res_files/res_5.csv')
+    pred_n_submit(x_train, x_label, './new/x_test_6.csv', df_test[1950000:], './res_files/res_6.csv')
 
     res_1 = pd.read_csv('./res_files/res_1.csv').fillna("")
     res_2 = pd.read_csv('./res_files/res_2.csv').fillna("")
@@ -843,7 +846,7 @@ if __name__ == '__main__':
     res_5 = pd.read_csv('./res_files/res_5.csv').fillna("")
     res_6 = pd.read_csv('./res_files/res_6.csv').fillna("")
 
-    res = pd.concat([sub, res_2, res_3, res_4, res_5, res_6])
+    res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
     res.to_csv("jus_tryin.csv", index = False)
 
     #After submitting paste files in ./new to ./old -- Building upon the already generated features
