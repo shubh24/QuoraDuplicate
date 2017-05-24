@@ -467,42 +467,36 @@ if __name__ == '__main__':
 
     #Real Testing
     x_train = df_train.apply(basic_nlp, axis = 1)
-    x_train.to_csv('x_train.csv', index=False)
-    %reset_selective x_train 
+    x_train.to_csv('./old/x_train.csv', index=False)
+    %reset_selective -f x_train 
 
     x_test_1 = df_test[0:390000].apply(basic_nlp, axis = 1)
-    x_test_1.to_csv('x_test_1.csv', index=False)   
-    %reset_selective x_test_1   
+    x_test_1.to_csv('./old/x_test_1.csv', index=False)   
+    %reset_selective -f x_test_1   
 
     x_test_2 = df_test[390000:780000].apply(basic_nlp, axis = 1)
-    x_test_2.to_csv('x_test_2.csv', index=False)
-    %reset_selective x_test_2   
+    x_test_2.to_csv('./old/x_test_2.csv', index=False)
+    %reset_selective -f x_test_2   
 
     x_test_3 = df_test[780000:1170000].apply(basic_nlp, axis = 1)
-    x_test_3.to_csv('x_test_3.csv', index=False)   
-    %reset_selective x_test_3   
+    x_test_3.to_csv('./old/x_test_3.csv', index=False)   
+    %reset_selective -f x_test_3   
 
     x_test_4 = df_test[1170000:1560000].apply(basic_nlp, axis = 1)
-    x_test_4.to_csv('x_test_4.csv', index=False)   
-    %reset_selective x_test_4   
+    x_test_4.to_csv('./old/x_test_4.csv', index=False)   
+    %reset_selective -f x_test_4   
 
     x_test_5 = df_test[1560000:1950000].apply(basic_nlp, axis = 1)
-    x_test_5.to_csv('x_test_5.csv', index=False)   
-    %reset_selective x_test_5   
+    x_test_5.to_csv('./old/x_test_5.csv', index=False)   
+    %reset_selective -f x_test_5   
 
     x_test_6 = df_test[1950000:].apply(basic_nlp, axis = 1)
-    x_test_6.to_csv('x_test_6.csv', index=False)   
-    %reset_selective x_test_6   
+    x_test_6.to_csv('./old/x_test_6.csv', index=False)   
+    %reset_selective -f x_test_6   
 
     #Finally!
-    x_train = pd.read_csv('./x_train.csv').fillna("")
+    x_train = pd.read_csv('./old/x_train.csv').fillna("")
     x_label = df_train.is_duplicate
-    x_test_1 = pd.read_csv('./x_test_1.csv').fillna("")
-    x_test_2 = pd.read_csv('./x_test_2.csv').fillna("")
-    x_test_3 = pd.read_csv('./x_test_3.csv').fillna("")
-    x_test_4 = pd.read_csv('./x_test_4.csv').fillna("")
-    x_test_5 = pd.read_csv('./x_test_5.csv').fillna("")
-    x_test_6 = pd.read_csv('./x_test_6.csv').fillna("")
     # x_test = pd.concat([x_test_1, x_test_2, x_test_3, x_test_4, x_test_5, x_test_6])
 
     if oversample_label == 1:
@@ -513,48 +507,61 @@ if __name__ == '__main__':
         # res_oversampled = run_xgb(x_train_oversampled, x_test, x_label_oversampled)
         # submit(res_oversampled)
 
+
+    x_test_1 = pd.read_csv('./old/x_test_1.csv').fillna("")
     res_1 = run_xgb(x_train, x_test_1, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[0:390000]['test_id']
     sub['is_duplicate'] = res_1
-    sub.to_csv('res_1.csv', index=False)   
+    sub.to_csv('./res_files/res_1.csv', index=False) 
+    %reset_selective -f x_test_1  
 
+    x_test_2 = pd.read_csv('./old/x_test_2.csv').fillna("")
     res_2 = run_xgb(x_train, x_test_2, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[390000:780000]['test_id']
     sub['is_duplicate'] = res_2
-    sub.to_csv('res_2.csv', index=False)   
+    sub.to_csv('./res_files/res_2.csv', index=False)   
+    %reset_selective -f x_test_2  
 
+    x_test_3 = pd.read_csv('./old/x_test_3.csv').fillna("")
     res_3 = run_xgb(x_train, x_test_3, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[780000:1170000]['test_id']
     sub['is_duplicate'] = res_3
-    sub.to_csv('res_3.csv', index=False)   
+    sub.to_csv('./res_files/res_3.csv', index=False)   
+    %reset_selective -f x_test_3  
 
+    x_test_4 = pd.read_csv('./old/x_test_4.csv').fillna("")
     res_4 = run_xgb(x_train, x_test_4, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[1170000:1560000]['test_id']
     sub['is_duplicate'] = res_4
-    sub.to_csv('res_4.csv', index=False)   
+    sub.to_csv('./res_files/res_4.csv', index=False)   
+    %reset_selective -f x_test_4  
 
+    x_test_5 = pd.read_csv('./old/x_test_5.csv').fillna("")
     res_5 = run_xgb(x_train, x_test_5, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[1560000:1950000]['test_id']
     sub['is_duplicate'] = res_5
-    sub.to_csv('res_5.csv', index=False)   
+    sub.to_csv('./res_files/res_5.csv', index=False)   
+    %reset_selective -f x_test_5  
 
+    x_test_6 = pd.read_csv('./old/x_test_6.csv').fillna("")
     res_6 = run_xgb(x_train, x_test_6, x_label)
     sub = pd.DataFrame()
     sub['test_id'] = df_test[1950000:]['test_id']
     sub['is_duplicate'] = res_6
-    sub.to_csv('res_6.csv', index=False)   
+    sub.to_csv('./res_files/res_6.csv', index=False)   
+    %reset_selective -f x_test_6  
 
-    res_1 = pd.read_csv('./res_1.csv').fillna("")
-    res_2 = pd.read_csv('./res_2.csv').fillna("")
-    res_3 = pd.read_csv('./res_3.csv').fillna("")
-    res_4 = pd.read_csv('./res_4.csv').fillna("")
-    res_5 = pd.read_csv('./res_5.csv').fillna("")
-    res_6 = pd.read_csv('./res_6.csv').fillna("")
+    res_1 = pd.read_csv('./res_files/res_1.csv').fillna("")
+    res_2 = pd.read_csv('./res_files/res_2.csv').fillna("")
+    res_3 = pd.read_csv('./res_files/res_3.csv').fillna("")
+    res_4 = pd.read_csv('./res_files/res_4.csv').fillna("")
+    res_5 = pd.read_csv('./res_files/res_5.csv').fillna("")
+    res_6 = pd.read_csv('./res_files/res_6.csv').fillna("")
     res = pd.concat([res_1, res_2, res_3, res_4, res_5, res_6])
-    res.to_csv("res_basic_nlp_oversampled.csv", index = False)
+    res.to_csv("res_redoing.csv", index = False)
     # submit(res)
