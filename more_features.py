@@ -310,32 +310,68 @@ def q2_ne_hash_freq(row):
     else:
         return hash_table[hash_key2]
 
+def train_to_qid(row):
+    
+    global qid_hash
+
+    if row["question1"] not in qid_hash:
+        qid_hash[row["question1"]] = row["qid1"]    
+
+    if row["question2"] not in qid_hash:
+        qid_hash[row["question2"]] = row["qid2"]    
+
 def test_to_qid(row):
 
     #cant take absolute qids, not seen in train. 
     #Difference magnitude means anything?
     #Proximity of qid, or frequency or something
-    instances_in_train_q1 = df_train[df_train["question1"] == row["question1"]]
-    instances_in_train_q2 = df_train[df_train["question2"] == row["question1"]]
+    # instances_in_train_q1 = df_train[df_train["question1"] == row["question1"]]
+    # instances_in_train_q2 = df_train[df_train["question2"] == row["question1"]]
 
-    if len(instances_in_train_q1) > 0:
-        qid1 = instances_in_train_q1.iloc[0].qid1
-    elif len(instances_in_train_q2) > 0:
-        qid1 = instances_in_train_q2.iloc[0].qid2
+    # if len(instances_in_train_q1) > 0:
+    #     qid1 = instances_in_train_q1.iloc[0].qid1
+    # elif len(instances_in_train_q2) > 0:
+    #     qid1 = instances_in_train_q2.iloc[0].qid2
+    # else:
+    #     qid1 = 537934 + int(row["test_id"])
+
+    # instances_in_train_q1 = df_train[df_train["question1"] == row["question2"]]
+    # instances_in_train_q2 = df_train[df_train["question2"] == row["question2"]]
+
+    # if len(instances_in_train_q1) > 0:
+    #     qid2 = instances_in_train_q1.iloc[0].qid1
+    # elif len(instances_in_train_q2) > 0:
+    #     qid2 = instances_in_train_q2.iloc[0].qid2
+    # else:
+    #     qid2 = 537934 + int(row["test_id"]) + 1
+
+    # return pd.Series({"qid1": qid1, "qid2": qid2})
+
+    global qid_hash
+    global max_qid
+
+    if row["question1"] not in qid_hash:
+        max_qid += 1
+
+        qid_hash[row["question1"]] = max_qid
+
+        q1_qid = max_qid
     else:
-        qid1 = 537934 + int(row["test_id"])
+        print "dupli", row["question1"]
+        q1_qid = qid_hash[row["question1"]]
 
-    instances_in_train_q1 = df_train[df_train["question1"] == row["question2"]]
-    instances_in_train_q2 = df_train[df_train["question2"] == row["question2"]]
+    if row["question2"] not in qid_hash:
+        max_qid += 1
 
-    if len(instances_in_train_q1) > 0:
-        qid2 = instances_in_train_q1.iloc[0].qid1
-    elif len(instances_in_train_q2) > 0:
-        qid2 = instances_in_train_q2.iloc[0].qid2
+        qid_hash[row["question2"]] = max_qid
+
+        q2_qid = max_qid
     else:
-        qid2 = 537934 + int(row["test_id"]) + 1
+        print "dupli", row["question1"]
+        q2_qid = qid_hash[row["question2"]]
 
-    return pd.Series({"qid1": qid1, "qid2": qid2})
+    return max(q1_qid, q2_qid)
+
 
 if __name__ == '__main__':
 
